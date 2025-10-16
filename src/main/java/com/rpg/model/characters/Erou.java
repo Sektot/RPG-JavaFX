@@ -1,0 +1,1788 @@
+package com.rpg.model.characters;
+
+import com.rpg.model.abilities.Abilitate;
+import com.rpg.model.effects.BuffStack;
+import com.rpg.model.items.BuffPotion;
+import com.rpg.model.items.EnchantScroll;
+import com.rpg.model.items.FlaskPiece;
+import com.rpg.model.items.ObiectEchipament;
+import com.rpg.service.PotionUpgradeService;
+import com.rpg.utils.GameConstants;
+
+import java.io.Serial;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+
+// Clasa aia blanao , blueprint si parinte pt celelalte clase de joc
+public class Erou implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    // Statistici de bază
+    private final String nume;
+    private int nivel;
+    private int xp;
+    private int xpNecesarPentruUrmatoarelNivel;
+
+    // Resurse
+    private int viata;
+    private int viataMaxima;
+    private int gold;
+    private int shards;
+
+    // shaorma
+    private int shaormaRevival = 1;
+
+    // Statistici principale
+    private int strength;
+    private int dexterity;
+    private int intelligence;
+    private int statPoints;
+
+    // Statistici derivate
+    private int defense;
+
+    // Inventar și consumabile
+    private final List<ObiectEchipament> inventar;
+    protected List<Abilitate> abilitati;
+    private int healthPotions;
+    private int manaPotions;
+
+    // Buff-uri active
+    private final Map<String, BuffStack> buffuriActive;
+
+    // RESURSE PENTRU CLASE SPECIFICE - PUBLIC pentru accesibilitate
+    public int resursaCurenta = 0;
+    public int resursaMaxima = 100;
+    public String tipResursa = "Mana";
+
+    // Resurse specifice claselor
+    private int mana = 0;
+    private int rage = 0;
+    private int rageMaxim = 100;
+    private int energy = 100;
+    private int energyMaxim = 100;
+
+    // Echipament
+    private Map<String, ObiectEchipament> echipat;
+
+//baza pentru a construi orice erou
+    public Erou(String nume, int strength, int dexterity, int intelligence) {
+        this.nume = nume;
+        this.nivel = 1;
+        this.xp = 0;
+        this.xpNecesarPentruUrmatoarelNivel = GameConstants.BASE_XP_REQUIRED;
+        this.strength = strength;
+        this.dexterity = dexterity;
+        this.intelligence = intelligence;
+        this.statPoints = 100;
+
+        calculateDerivedStats();
+        this.viata = this.viataMaxima;
+        this.gold = GameConstants.INITIAL_GOLD;
+        this.shards = 0;
+        this.shaormaRevival = 1; // Începe cu 0 șaorme
+        this.healthPotions = GameConstants.INITIAL_POTIONS;
+        this.manaPotions = GameConstants.INITIAL_MANA_POTIONS;
+
+        this.inventar = new ArrayList<>();
+        this.abilitati = new ArrayList<>();
+        this.buffuriActive = new HashMap<>();
+        this.echipat = new HashMap<>();
+
+        // Inițializează resursa curentă cu maxima
+        this.resursaCurenta = this.resursaMaxima;
+    }
+
+    private void calculateDerivedStats() {
+        this.viataMaxima = GameConstants.BASE_HEALTH +
+                (strength * GameConstants.HEALTH_PER_STRENGTH) +
+                (nivel * GameConstants.HEALTH_PER_LEVEL);
+        int manaMaxima = GameConstants.BASE_MANA +
+                (intelligence * GameConstants.MANA_PER_INTELLIGENCE) +
+                (nivel * GameConstants.MANA_PER_LEVEL);
+        this.defense = GameConstants.BASE_DEFENSE + (strength / 3) + (dexterity / 4);
+
+        if (this.viata > this.viataMaxima) this.viata = this.viataMaxima;
+        if (this.mana > manaMaxima) this.mana = manaMaxima;
+    }
+
+    // ================== SISTEMUL DE REVIVAL CU ȘAORMA! ==================
+
+//metoda pt a adauga shaorme
+    public void adaugaShaormaRevival(int cantitate) {
+        this.shaormaRevival += cantitate;
+        if (cantitate > 0) {
+            System.out.printf("🌯 Ai primit %d Șaorma de Revival! (Total: %d)\n",
+                    cantitate, shaormaRevival);
+        }
+    }
+
+// metoda pentru a folosi sistem de revival
+    public boolean folosesteShaormaRevival() {
+       //aici verifica daca am shaorme daca nu am da false
+        if (shaormaRevival <= 0) {
+            return false; // Nu are șaorme
+        }
+//aici scade nr de shaorme daca am
+        shaormaRevival--;
+
+        // ress user cu 50% viață și resurse
+        int revivedHealth = viataMaxima / 2;
+        int revivedResources = resursaMaxima / 2;
+
+        this.viata = revivedHealth;
+        this.resursaCurenta = revivedResources;
+
+
+        //printuri pt display
+        System.out.println("\n═══════════════════════════════════════");
+        System.out.println("   🌯✨ ȘAORMA DE REVIVAL ACTIVATĂ! ✨🌯");
+        System.out.println("  ═══════════════════════════════════════");
+        System.out.printf("💚 %s s-a reîntors din tărâmul umbrelor!\n", nume);
+        System.out.printf("❤️  Viață restaurată: %d/%d (50%%)\n", viata, viataMaxima);
+        System.out.printf("🔋 %s restaurate: %d/%d (50%%)\n", tipResursa, resursaCurenta, resursaMaxima);
+        System.out.printf("🌯 Șaorme rămase: %d\n", shaormaRevival);
+        System.out.println("\n✨ Gustul delicațiunii magice îți dă putere să continui!");
+        System.out.println("💪 Reîntoarce-te în luptă, erou!");
+
+        return true;
+    }
+
+//verifica daca are shaorme se foloseste in gameservice pt handling death
+    public boolean areShaormaRevival() {
+        return shaormaRevival > 0;
+    }
+
+
+//============================
+//    public int getXpNecesar() {
+//        return xpNecesarPentruUrmatoarelNivel;
+//    }
+
+//============================================
+    //metode pt character factory de unde seteaza atributele cand se creeaza caracterul
+    public void setXp(int xp) {
+        this.xp = Math.max(0, xp);
+    }
+
+    public void setGold(int gold) {
+        this.gold = Math.max(0, gold);
+    }
+
+    public void setViataCurenta(int viata) {
+        this.viata = Math.max(0, Math.min(viata, viataMaxima));
+    }
+
+    public void setResursaCurenta(int resursa) {
+        this.resursaCurenta = Math.max(0, Math.min(resursa, resursaMaxima));
+        switch (tipResursa.toLowerCase()) {
+            case "rage" -> this.rage = this.resursaCurenta;
+            case "energy" -> this.energy = this.resursaCurenta;
+            default -> this.mana = this.resursaCurenta;
+        }
+    }
+
+    //metoda cand mori doar display de linii nimic fancy
+    public void afiseazaMeniuMoarte() {
+        //BattleOneLiners.displayDeathOneLiner(this);
+        System.out.println("\n💀 " + "═".repeat(60));
+        System.out.println("        ⚰️  EROUL A CĂZUT ÎN LUPTĂ ⚰️");
+        System.out.println("═".repeat(60));
+        System.out.printf("💀 %s (Nivel %d) a fost învins...\n", nume, nivel);
+        System.out.println();
+
+//        // ✨ ADAUGĂ AICI
+//        String deathMsg = getDeathMessage();
+//        if (deathMsg != null && !deathMsg.isEmpty()) {
+//            System.out.println(deathMsg);
+//            System.out.println();
+//        }
+
+        // Afișează statisticile finale
+        System.out.println("📊 Progresul tău până acum:");
+        System.out.printf("🏆 Nivel atins: %d\n", nivel);
+        System.out.printf("⭐ XP acumulat: %d\n", xp);
+        System.out.printf("💰 Gold: %d | 💎 Shards: %d | 🌯 Șaorme Revival: %d\n",
+                gold, shards, shaormaRevival);
+
+        System.out.println("\n⚱️ În luptă mori, dar spiritul tău persistă...");
+
+        if (shaormaRevival > 0) {
+            System.out.printf("\n🌯 ✨ AI %d ȘAORMA DE REVIVAL DISPONIBILĂ! ✨\n", shaormaRevival);
+            System.out.println("🍖 Această delicatesă magică poate să îți redea viața!");
+        } else {
+            System.out.println("\n🌯 Nu ai Șaorme de Revival...");
+            System.out.println("💡 Șaormele de Revival cad doar din Boss-i!");
+        }
+
+        System.out.println("\n" + "═".repeat(60));
+    }
+
+    // Metode pt shop
+
+    public boolean scadeGold(int amount) {
+        if (gold >= amount) {
+            gold -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    public void adaugaHealthPotions(int amount) {
+        this.healthPotions += Math.max(0, amount);
+    }
+
+    public void adaugaManaPotions(int amount) {
+        this.manaPotions += Math.max(0, amount);
+    }
+
+//    public void vindecaComplet() {
+//        this.viata = this.viataMaxima;
+//        System.out.println("💚 " + nume + " a fost vindecat complet!");
+//    }
+
+
+    // asta e pentru regem de mana folosita odata mai jos
+    public void regenereazaResursa(int amount) {
+        this.resursaCurenta = Math.min(resursaMaxima, resursaCurenta + amount);
+        switch (tipResursa.toLowerCase()) {
+            case "rage" -> this.rage = this.resursaCurenta;
+            case "energy" -> this.energy = this.resursaCurenta;
+            default -> this.mana = this.resursaCurenta;
+        }
+    }
+
+    //================================
+    // Metode pt trainer is apelate in trainer service
+
+    public int getStatPoints() {
+        return statPoints;
+    }
+
+    public boolean decreaseStatPoints(int amount) {
+        if (statPoints >= amount) {
+            statPoints -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    public void increaseStrength(int amount) {
+        this.strength += amount;
+        calculateDerivedStats();
+        System.out.printf("💪 Strength: %d (+%d)\n", strength, amount);
+    }
+
+    public void increaseDexterity(int amount) {
+        this.dexterity += amount;
+        calculateDerivedStats();
+        System.out.printf("🎯 Dexterity: %d (+%d)\n", dexterity, amount);
+    }
+
+    public void increaseIntelligence(int amount) {
+        this.intelligence += amount;
+        calculateDerivedStats();
+        System.out.printf("🧠 Intelligence: %d (+%d)\n", intelligence, amount);
+    }
+
+
+    // asta e pt upgrade de echipament
+    public boolean scadeShards(int amount) {
+        if (shards >= amount) {
+            shards -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    //=================
+    //Metode pt echipament
+
+    //ia o mapa de echipamente si returneaza un hashmap cu cele echipate
+    //folosit in battle pt a determina dmg si staturi
+    public Map<String, ObiectEchipament> getEchipat() {
+        return new HashMap<>(echipat);
+    }
+
+    //metoda pt echipare, verifica nivelul eroului si nivelul echipamentului si daca obiectull nu e null
+    public void echipeaza(ObiectEchipament item) {
+        if (item == null || nivel < item.getNivelNecesar()) {
+            return;
+        }
+
+        // extrage tipul itemului ca string pentru key in echipat map
+        //double check sa nu fie null
+        //dar chiar daca e il returneaza ca default desi nu ecazu
+        String tipItem = item.getTip() != null ? item.getTip().toString() : "DEFAULT";
+        //asta se foloseste ca sa dezechipeze un item automat din
+        //slotul ala in care ai echipat acum un item
+        if (echipat.containsKey(tipItem)) {
+            echipat.get(tipItem).setEquipped(false);
+        }
+
+        //aici seteaza noul item ca true
+        item.setEquipped(true);
+       //adauga sau da replace la item cu valorile sale
+        echipat.put(tipItem, item);
+        //calculeaza staturile in functie de item
+        calculateDerivedStats();
+        System.out.println("✅ " + item.getNume() + " a fost echipat!");
+    }
+
+    //in esenta se fac aceleasi chekuri ca si la cel de echipeaza
+    public void dezechipeaza(ObiectEchipament item) {
+        if (item != null && item.isEquipped()) {
+            String tipItem = item.getTip() != null ? item.getTip().toString() : "DEFAULT";
+            //da remove la tipul de item
+            echipat.remove(tipItem);
+           //seteaza echipat la false
+            item.setEquipped(false);
+            //calculeaza din nou staturile fara item
+            calculateDerivedStats();
+            System.out.println("❌ " + item.getNume() + " a fost dezechipat!");
+        }
+    }
+
+// metoda folosita la vinzare sau la disenchant
+    public boolean removeFromInventar(ObiectEchipament item) {
+       //da remove la item din inventar
+        boolean removed = inventar.remove(item);
+        //aici verifica daca e echipat si ii da remove direct de acolo
+        if (removed && item.isEquipped()) {
+            dezechipeaza(item);
+        }
+        // returneaza bool, daca e removed=true, othewise false
+        return removed;
+    }
+
+
+
+    // getteri de staturi====================
+    public int getStrengthTotal() {
+        return strength + getEquipmentBonus("strength");
+    }
+
+    public int getDexterityTotal() {
+        return dexterity + getEquipmentBonus("dexterity");
+    }
+
+    public int getIntelligenceTotal() {
+        return intelligence + getEquipmentBonus("intelligence");
+    }
+
+    // un getter pt bonusurile de la echipamente
+    private int getEquipmentBonus(String stat) {
+        int bonus = 0;
+        for (ObiectEchipament item : echipat.values()) {
+            if (item != null && item.getBonuses() != null && item.getBonuses().containsKey(stat)) {
+                bonus += item.getBonuses().get(stat);
+            }
+        }
+        //returneaza un int cu bonusurile
+        return bonus;
+    }
+
+    // Getteri de resurse mana si alea alea=====================
+
+    public int getResursaCurenta() {
+        return resursaCurenta;
+    }
+
+    public int getResursaMaxima() {
+        return resursaMaxima;
+    }
+
+    public String getTipResursa() {
+        return tipResursa;
+    }
+
+    public void setTipResursa(String tipResursa) {
+        this.tipResursa = tipResursa;
+    }
+
+    public boolean areResursaSuficienta(int cost) {
+        return resursaCurenta >= cost;
+    }
+
+    public boolean areResursaSuficienta(Abilitate ability) {
+        return areResursaSuficienta(ability.getCostMana());
+    }
+
+    public boolean consumaResursa(int cost) {
+        if (!areResursaSuficienta(cost)) return false;
+        resursaCurenta = Math.max(0, resursaCurenta - cost);
+        return true;
+    }
+
+    public boolean consumaResursa(Abilitate ability) {
+        return consumaResursa(ability.getCostMana());
+    }
+
+    public void regenResursa(int amount) {
+        resursaCurenta = Math.min(resursaMaxima, resursaCurenta + amount);
+    }
+
+    // ================== METODE PENTRU ABILITĂȚI ==================
+
+//Metoda pt initializare de abilitati care e suprscrisa atunci cand alegi o clasa
+    public void initializeazaAbilitati() {
+        abilitati = new ArrayList<>();
+    }
+
+// la fel ca si cea de sus doar ca cu abilitatile obtinute la un nivel
+    public Abilitate abilitateSpecialaNivel(int nivel) {
+        return null;
+    }
+
+//metoda de regen, suprascrisa daca e moldo sau oltean care folosesc alte resurse
+    public int regenNormal() {
+        return GameConstants.RESOURCE_REGEN_PER_TURN;
+    }
+
+    //metoda folosita pentru a da check daca sunt abilitati noi la lvl up si le adauga
+    public void adaugaAbilitate(Abilitate abilitate) {
+        if (abilitate != null) {
+            abilitati.add(abilitate);
+        }
+    }
+
+    // Metode de utilizare a potiunilor
+
+   // metoda de folosire la health potion
+    public boolean useHealthPotion() {
+        if (healthPotions > 0 && viata < viataMaxima) {
+            healthPotions--;
+            int healAmount = getHealthPotionHealing(); // Folosește tier-ul actual
+            vindeca(healAmount);
+
+            System.out.printf("🧪 %s Berice folosită!\n", healthPotionTier.getIcon());
+            return true;
+        }
+        return false;
+    }
+
+// metoda de folosire a manapotion
+// În Erou.java, adaugă această metodă dacă lipsește:
+public boolean useManaPotion() {
+    if (manaPotions > 0 && resursaCurenta < resursaMaxima) {
+        manaPotions--;
+        int restoreAmount = getManaPotionRestore();
+        regenereazaResursa(restoreAmount);
+
+        System.out.printf("💙 %s Energizant Profi folosit!\\n", manaPotionTier.getIcon());
+        System.out.printf("🔋 +%d %s! (%d/%d)\\n",
+                restoreAmount, tipResursa, resursaCurenta, resursaMaxima);
+        return true;
+    }
+    return false;
+}
+
+
+// metoda de folosire a buff potions
+    public boolean useBuffPotion(BuffPotion.BuffType type) {
+        int available = buffPotions.getOrDefault(type, 0);
+        if (available <= 0) {
+            return false;
+        }
+
+        // Consumă potion-ul
+        buffPotions.put(type, available - 1);
+
+        // Obține bonusurile poțiunii
+        Map<String, Double> bonuses = type.getBonuses();
+
+        // Aplică buff-ul - durează pentru 1 luptă
+        // Folosim prefix "BuffPotion_" pentru a diferenția de alte buff-uri
+        aplicaBuff("BuffPotion_" + type.name(), bonuses, 1);
+
+        System.out.printf("🧪 Ai folosit %s %s!\n", type.getIcon(), type.getDisplayName());
+        System.out.println("✨ Efecte active:");
+
+        // Afișează efectele
+        bonuses.forEach((stat, value) -> {
+            String displayValue = value > 0 ? "+" + value : String.valueOf(value);
+            System.out.printf("   • %s %s\n", displayValue, formatStatName(stat));
+        });
+
+        return true;
+    }
+
+  // helper pt formatarea numelor statisticilor
+    private String formatStatName(String stat) {
+        return switch (stat.toLowerCase()) {
+            case "strength" -> "💪 Strength";
+            case "dexterity" -> "🎯 Dexterity";
+            case "intelligence" -> "🧠 Intelligence";
+            case "damage_bonus" -> "⚔️ Damage Bonus";
+            case "defense" -> "🛡️ Defense";
+            case "crit_chance" -> "⚡ Critical Chance";
+            case "dodge_chance" -> "💨 Dodge Chance";
+            case "hit_chance" -> "🎯 Hit Chance";
+            default -> stat;
+        };
+    }
+
+
+    // ================== METODE DE ȘANSE ==================
+
+    public double getHitChance() {
+        double baseHitChance = GameConstants.BASE_HIT_CHANCE;
+        double dexBonus = getDexterityTotal() * GameConstants.HIT_CHANCE_PER_DEX;
+        double levelBonus = nivel * GameConstants.HIT_CHANCE_PER_LEVEL;
+        // mai sus calculeaa pe baza la constante si staturi
+        // si da return la un maxim de 95%
+        return Math.min(95.0, baseHitChance + dexBonus + levelBonus);
+    }
+
+    public double getCritChanceTotal() {
+        double baseCritChance = GameConstants.BASE_CRIT_CHANCE;
+        double dexBonus = getDexterityTotal() * GameConstants.CRIT_CHANCE_PER_DEX;
+        return Math.min(50.0, baseCritChance + dexBonus);
+    }
+
+    public double getDodgeChanceTotal() {
+        double baseDodgeChance = GameConstants.BASE_DODGE_CHANCE;
+        double dexBonus = getDexterityTotal() * GameConstants.DODGE_CHANCE_PER_DEX;
+        return Math.min(75.0, baseDodgeChance + dexBonus);
+    }
+
+    public int getDefenseTotal() {
+        return defense + getEquipmentBonus("defense");
+    }
+
+    // ================== METODE DE ACTUALIZARE STĂRI ==================
+
+    public void actualizeazaStari() {
+        // Procesează buff-urile pentru heal
+        for (BuffStack buff : buffuriActive.values()) {
+            if (buff.isActive()) {
+                Map<String,Double> mods = buff.getAllModifiers();
+                if (mods.containsKey("heal_per_turn")) {
+                    int healAmount = mods.get("heal_per_turn").intValue();
+                    vindeca(healAmount);
+                    System.out.printf(
+                            "🌿 Regenerare: %s primește +%d HP din Nature buff%n",
+                            getNume(), healAmount
+                    );
+                }
+            }
+        }
+
+
+        // Codul existent pentru aplicarea efectelor
+        aplicaEfecteleBuffurilor();
+        regenResursa(regenNormal());
+        if (viata < viataMaxima) {
+            vindeca(GameConstants.NATURAL_HEALTH_REGEN);
+        }
+    }
+
+
+
+// metoda de aplicare buffuri
+
+    public void aplicaBuff(String nume, Map<String, Double> modificatori, int durata) {
+        if (modificatori == null || modificatori.isEmpty()) {
+            return;
+        }
+        if (buffuriActive.containsKey(nume)) {
+            buffuriActive.get(nume).addStack(durata);
+        } else {
+            buffuriActive.put(nume, new BuffStack(modificatori, durata, GameConstants.MAX_BUFF_STACKS));
+        }
+        System.out.printf("✨ Buff %s aplicat pentru %d ture!%n", nume, durata);
+    }
+
+
+
+// proceseaza si expira buffurile active
+    // trece prin toate buffurile
+    //da decrease la duration pt fiecare
+    //da check daca e expirat
+    //mesaj de display
+    //da remove la buff
+    public void aplicaEfecteleBuffurilor() {
+        buffuriActive.entrySet().removeIf(entry -> {
+            BuffStack buff = entry.getValue();
+            buff.decreaseDuration();
+            if (!buff.isActive()) {
+                System.out.println("⏰ Buff " + entry.getKey() + " a expirat pentru " + nume);
+                return true;
+            }
+            return false;
+        });
+    }
+
+    //self explenatory se adauga xp, apelata dupa procesarea luptei
+    public void adaugaXp(int xp) {
+        this.xp += xp;
+        System.out.printf("✨ +%d XP (Total: %d/%d)\\n",
+                xp, this.xp, xpNecesarPentruUrmatoarelNivel);
+
+        // 🆕 TRIGGER LEVEL-UP AUTOMAT
+        int oldLevel = this.nivel;
+        int newLevel = processLevelUp();
+
+        if (newLevel > oldLevel) {
+            System.out.printf("🎉 MULTIPLE LEVEL UP! %d -> %d\\n", oldLevel, newLevel);
+            System.out.println("════════════════════════════════════════");
+            System.out.println("    🌟 CONGRATULATIONS! 🌟");
+            System.out.println("════════════════════════════════════════");
+            System.out.printf("🎯 Noul tău nivel: %d\\n", newLevel);
+            System.out.printf("📊 Stat Points disponibili: %d\\n", statPoints);
+            System.out.printf("❤️  Viață maximă: %d\\n", viataMaxima);
+            System.out.println("💡 Vizitează Trainer-ul pentru a upgrala stats!");
+            System.out.println("════════════════════════════════════════");
+        }
+    }
+
+    // verificare daca xp = xp pt lvl up
+    public boolean hasLeveledUp() {
+        return xp >= xpNecesarPentruUrmatoarelNivel;
+    }
+
+    // procesarea la lvl up
+// procesarea la lvl up
+    public int processLevelUp() {
+        if (!hasLeveledUp()) return nivel;
+
+        int levelsGained = 0;
+
+        while (xp >= xpNecesarPentruUrmatoarelNivel) {
+            xp -= xpNecesarPentruUrmatoarelNivel;
+            nivel++;
+            levelsGained++;
+
+            xpNecesarPentruUrmatoarelNivel = (int)(GameConstants.BASE_XP_REQUIRED *
+                    Math.pow(GameConstants.XP_MULTIPLIER, nivel - 1));
+
+            int statPointsEarned = GameConstants.STAT_POINTS_PER_LEVEL;
+            if (nivel % 5 == 0) statPointsEarned += 2; // Bonus la multipli de 5
+            statPoints += statPointsEarned;
+
+            // 🔇 QUIET LEVEL UP - doar essentials
+            System.out.printf("📈 Level %d → %d (+%d stat points)\\n",
+                    nivel - 1, nivel, statPointsEarned);
+
+            int oldViataMax = viataMaxima;
+            calculateDerivedStats();
+
+            int viataBonus = viataMaxima - oldViataMax;
+            viata += viataBonus; // Bonus HP la level-up
+
+            // Abilități noi
+            Abilitate nouaAbilitate = abilitateSpecialaNivel(nivel);
+            if (nouaAbilitate != null) {
+                adaugaAbilitate(nouaAbilitate);
+                System.out.println("🎉 Abilitate nouă: " + nouaAbilitate.getNume());
+            }
+        }
+
+        return nivel;
+    }
+
+
+    public void adaugaGold(int gold) { this.gold += gold; }
+   // public void decreaseGold(int amount) { this.gold = Math.max(0, this.gold - amount); }
+    public void adaugaShards(int shards) { this.shards += shards; }
+   // public void decreaseShards(int amount) { this.shards = Math.max(0, this.shards - amount); }
+
+
+    //ii clar ce face ori din inamici ori din shop
+    public void adaugaInInventar(ObiectEchipament obiect) {
+        if (obiect != null) {
+            inventar.add(obiect);
+        }
+    }
+
+    // vindeca eroul cu set amount, ori in potions ori din buffuri de regen
+    //e folosita si la inamici
+    public void vindeca(int amount) {
+        int viataVindecata = Math.min(amount, viataMaxima - viata);
+        viata += viataVindecata;
+        if (viataVindecata > 0) {
+            System.out.printf("💚 %s se vindecă cu %d HP! (%d/%d)\n",
+                    nume, viataVindecata, viata, viataMaxima);
+        }
+    }
+
+    // metoda pt calcul de dmgin dependenta de defense cu un minim de 0
+    public void iaDamage(int damage) {
+        int finalDamage = Math.max(0, damage - getDefenseTotal());
+       // int oldViata = viata;
+        viata = Math.max(0, viata - finalDamage);
+
+        // DEBUGGING pentru a vedea exact ce se întâmplă
+      //  System.out.printf("DEBUG: %s primește %d damage! HP: %d -> %d\n",
+              //  nume, finalDamage, oldViata, viata);
+
+        if (viata == 0) {
+            System.out.println("🔥 EROUL A MURIT COMPLET! viata = 0");
+        }
+    }
+
+    // un bool pt a verifica daca e in viata
+    public boolean esteViu() {
+        boolean viu = viata > 0;
+        if (!viu) {
+          //  System.out.println("DEBUG: esteViu() = false, viata = " + viata);
+        }
+        return viu;
+    }
+
+
+    //====================================
+    // determinarea de tieruri la potions, mapa de flask pieces, buff potions si scrolluri
+    // tieruri de flask potions
+    private PotionUpgradeService.PotionTier healthPotionTier = PotionUpgradeService.PotionTier.BASIC;
+    private PotionUpgradeService.PotionTier manaPotionTier = PotionUpgradeService.PotionTier.BASIC;
+
+    // flask pieces
+    private Map<FlaskPiece.FlaskType, Integer> flaskPieces = new HashMap<>();
+
+    // buff pot in inventar
+    private Map<BuffPotion.BuffType, Integer> buffPotions = new HashMap<>();
+
+    // ench scroll in inventar
+    private Map<EnchantScroll.EnchantType, EnchantScroll> enchantScrolls = new HashMap<>();
+
+
+    // =========================
+    // Metode pt potion upgrades
+
+ //getter pt tier la hp potion
+    public PotionUpgradeService.PotionTier getHealthPotionTier() {
+        return healthPotionTier;
+    }
+
+// setter pt hp potion
+    public void setHealthPotionTier(PotionUpgradeService.PotionTier tier) {
+        this.healthPotionTier = tier;
+    }
+
+ // getter mana potion
+    public PotionUpgradeService.PotionTier getManaPotionTier() {
+        return manaPotionTier;
+    }
+
+// setter la mana potion
+    public void setManaPotionTier(PotionUpgradeService.PotionTier tier) {
+        this.manaPotionTier = tier;
+    }
+
+// calcul de heal pe baza la tier
+    public int getHealthPotionHealing() {
+        int baseHealing = GameConstants.HEALTH_POTION_HEAL;
+        return (int)(baseHealing * healthPotionTier.getMultiplier()) + healthPotionTier.getBaseValue();
+    }
+
+// acelasi lucru da pt mana potion
+    public int getManaPotionRestore() {
+        int baseRestore = GameConstants.MANA_POTION_RESTORE;
+        return (int)(baseRestore * manaPotionTier.getMultiplier()) + manaPotionTier.getBaseValue();
+    }
+
+    //METODE DE FL. PIECES===================
+
+//metoda de a adauga flask sharduri folosita ca loot
+    public void addFlaskPieces(FlaskPiece.FlaskType type, int quantity) {
+        flaskPieces.merge(type, Math.max(0, quantity), Integer::sum);
+        System.out.printf("🧪 Ai primit %d %s %s!\n",
+                quantity, type.getIcon(), type.getDisplayName());
+    }
+
+// metoda de a consuma piecurile folosita in a upgrada
+    public boolean consumeFlaskPieces(FlaskPiece.FlaskType preferredType, int quantity) {
+
+        // Încearcă să consume din tipul preferat
+        int availablePreferred = flaskPieces.getOrDefault(preferredType, 0);
+        int availableUniversal = flaskPieces.getOrDefault(FlaskPiece.FlaskType.UNIVERSAL, 0);
+
+        if (availablePreferred + availableUniversal < quantity) {
+            return false; // Nu sunt destule
+        }
+
+        // Consumă din preferred type primul
+        int fromPreferred = Math.min(quantity, availablePreferred);
+        int fromUniversal = quantity - fromPreferred;
+
+        if (fromPreferred > 0) {
+            flaskPieces.put(preferredType, availablePreferred - fromPreferred);
+        }
+        if (fromUniversal > 0) {
+            flaskPieces.put(FlaskPiece.FlaskType.UNIVERSAL, availableUniversal - fromUniversal);
+        }
+
+        return true;
+    }
+
+// getter de flsk piece-uri disponibile
+    public int getFlaskPiecesQuantity(FlaskPiece.FlaskType type) {
+        return flaskPieces.getOrDefault(type, 0);
+    }
+
+// getter din toate flask pieceurile
+    public Map<FlaskPiece.FlaskType, Integer> getAllFlaskPieces() {
+        return new HashMap<>(flaskPieces);
+    }
+
+    // ================== METODE PENTRU BUFF POTIONS ==================
+
+//metoda de a adauga buff potions de folosita pt fiecare tip in shop
+    public void addBuffPotion(BuffPotion.BuffType type, int quantity) {
+        buffPotions.merge(type, Math.max(0, quantity), Integer::sum);
+        System.out.printf("🧪 Ai primit %d %s %s!\n",
+                quantity, type.getIcon(), type.getDisplayName());
+    }
+
+
+// getter pt cate buff potions am de tipuri
+    public int getBuffPotionQuantity(BuffPotion.BuffType type) {
+        return buffPotions.getOrDefault(type, 0);
+    }
+
+//getter pt toate buff potions
+    public Map<BuffPotion.BuffType, Integer> getAllBuffPotions() {
+        return new HashMap<>(buffPotions);
+    }
+
+    // ====================================
+//METODE PT SCROLL-uri
+
+// metoda ca sa adaug scrolluri in inventar
+    public void addEnchantScroll(EnchantScroll.EnchantType type, int quantity, int level) {
+        EnchantScroll existingScroll = enchantScrolls.get(type);
+
+        if (existingScroll != null && existingScroll.getEnchantLevel() == level) {
+            // Același nivel, adaugă cantitatea
+            existingScroll.addQuantity(quantity);
+        } else {
+            // Nivel diferit sau scroll nou
+            enchantScrolls.put(type, new EnchantScroll(type, quantity, level));
+        }
+
+        System.out.printf("📜 Ai primit %d %s (Nivel %d)!\n",
+                quantity, type.getDisplayName(), level);
+    }
+
+// metoda pt a folosi scrolluri
+    public boolean useEnchantScroll(EnchantScroll.EnchantType type, ObiectEchipament weapon) {
+        EnchantScroll scroll = enchantScrolls.get(type);
+        if (scroll == null || !scroll.canUse()) {
+            System.out.println("❌ Nu ai acest tip de scroll sau nu mai ai bucăți!");
+            return false;
+        }
+
+        // Verifică dacă e armă
+        if (weapon.getTip() != ObiectEchipament.TipEchipament.WEAPON) {
+            System.out.println("❌ Enchant scrolls pot fi folosite doar pe arme!");
+            return false;
+        }
+
+        // Verifică costul în gold
+        int goldCost = scroll.getApplicationCost();
+        if (gold < goldCost) {
+            System.out.printf("❌ Îți lipsesc %d gold pentru a aplica enchantment-ul!%n",
+                    goldCost - gold);
+            return false;
+        }
+
+        // Verifică dacă weapon-ul are deja acest enchantment
+        if (weapon.hasEnchantment(type.getDamageType())) {
+            int currentDamage = weapon.getEnchantmentDamage(type.getDamageType());
+            int newDamage = scroll.getEnchantDamage();
+
+            System.out.printf("⚠️  Weapon-ul are deja %s enchantment (%d damage)!%n",
+                    type.getDamageType(), currentDamage);
+            System.out.printf("🔄 Noul enchantment va fi %d damage.%n", newDamage);
+            System.out.printf("💡 Enchantment-ul existent va fi %s!%n",
+                    newDamage > currentDamage ? "îmbunătățit" : "înlocuit");
+        }
+
+        // Consumă scroll-ul și gold-ul
+        scroll.consumeQuantity(1);
+        scadeGold(goldCost);
+
+        // Aplică enchantment la armă folosind noua metodă
+        weapon.applyEnchantment(type.getDamageType(), scroll.getEnchantDamage());
+
+        // Actualizează numele armei să includă enchantment-ul
+        updateWeaponNameWithEnchantments(weapon);
+
+        // Afișează succesul
+        System.out.println("\\n✨ " + "═".repeat(50));
+        System.out.println("   🎉 ENCHANTMENT APLICAT CU SUCCES! 🎉");
+        System.out.println("═".repeat(50));
+        System.out.printf("⚔️  Armă: %s%n", weapon.getNume());
+        System.out.printf("🔥 Enchantment: %s %s (+%d %s damage)%n",
+                type.getIcon(), type.getDisplayName(),
+                scroll.getEnchantDamage(), type.getDamageType());
+        System.out.printf("✨ Efect special: %s%n", type.getSpecialEffect());
+        System.out.printf("💰 Cost: %d gold (Rămâne: %d gold)%n", goldCost, gold);
+
+        // Afișează toate enchantment-urile active
+        Map<String, Integer> allEnchants = weapon.getAllEnchantments();
+        if (allEnchants.size() > 1) {
+            System.out.println("🌟 Toate enchantment-urile active:");
+            allEnchants.forEach((enchantType, damage) -> {
+                String icon = getEnchantmentIcon(enchantType);
+                System.out.printf("   %s %s: +%d damage%n",
+                        icon, enchantType.toUpperCase(), damage);
+            });
+        }
+        System.out.println("═".repeat(50));
+
+        return true;
+    }
+
+// actualizare nume la weapon in dependenta de enchant
+    private void updateWeaponNameWithEnchantments(ObiectEchipament weapon) {
+        // Înlătură enchantment-urile anterioare din nume
+        String baseName = weapon.getNume().replaceAll("\\s*\\[[^\\]]+\\]", "");
+
+        Map<String, Integer> enchantments = weapon.getAllEnchantments();
+        if (enchantments.isEmpty()) {
+            weapon.setNume(baseName);
+            return;
+        }
+
+        // Construiește noul nume cu toate enchantment-urile
+        StringBuilder enchantDisplay = new StringBuilder(" [");
+        enchantments.forEach((type, damage) -> {
+            String icon = getEnchantmentIcon(type);
+            enchantDisplay.append(icon).append(type.toUpperCase()).append(" ");
+        });
+        enchantDisplay.append("]");
+
+        weapon.setNume(baseName + enchantDisplay.toString());
+    }
+
+
+// iconitele pentru numele la weapon cu enchant sau pur si simplu enchanturi
+    public String getEnchantmentIcon(String enchantType) {
+        return switch (enchantType.toLowerCase()) {
+            case "fire" -> "🔥";
+            case "ice" -> "❄️";
+            case "lightning" -> "⚡";
+            case "poison" -> "☠️";
+            case "holy" -> "✨";
+            case "shadow" -> "🌑";
+            case "arcane" -> "🔮";
+            case "nature" -> "🌿";
+            default -> "✨";
+        };
+    }
+
+
+// getter cu toate enchanturile
+    public Map<EnchantScroll.EnchantType, EnchantScroll> getAllEnchantScrolls() {
+        return new HashMap<>(enchantScrolls);
+    }
+
+//==============================================================
+
+// metoda de afisare a tot ce il intereseaza pe player
+
+    public void afiseazaStatusComplet() {
+        System.out.println("\n" + "═".repeat(70));
+        System.out.println("        📊 STATUS COMPLET - " + nume);
+        System.out.println("═".repeat(70));
+
+        // =================== INFORMATII DE BAZA ===================
+        System.out.printf("🎯 Nivel: %d | ⭐ XP: %d/%d (%.1f%%)\n",
+                nivel, xp, xpNecesarPentruUrmatoarelNivel,
+                ((double) xp / xpNecesarPentruUrmatoarelNivel) * 100);
+
+        System.out.printf("❤️  Viață: %d/%d | %s %s: %d/%d\n",
+                viata, viataMaxima, getResourceIcon(), tipResursa,
+                resursaCurenta, resursaMaxima);
+
+        // =================== STATISTICI PRINCIPALE ===================
+        System.out.println("\n📈 STATISTICI:");
+        System.out.printf("💪 Strength: %d (%d base + %d echipament)\n",
+                getStrengthTotal(), strength, getEquipmentBonus("strength"));
+        System.out.printf("🏃 Dexterity: %d (%d base + %d echipament)\n",
+                getDexterityTotal(), dexterity, getEquipmentBonus("dexterity"));
+        System.out.printf("🧠 Intelligence: %d (%d base + %d echipament)\n",
+                getIntelligenceTotal(), intelligence, getEquipmentBonus("intelligence"));
+        System.out.printf("🛡️  Defense: %d (%d base + %d echipament)\n",
+                getDefenseTotal(), defense, getEquipmentBonus("defense"));
+
+        // =================== RESURSE SI CONSUMABILE ===================
+        System.out.println("\n💰 RESURSE:");
+        System.out.printf("💰 Gold: %d | 💎 Shards: %d | 🎯 Puncte stat: %d\n",
+                gold, shards, statPoints);
+        System.out.printf("🧪 Berice: %d | 💙 Energizant Profi %s: %d\n",
+                healthPotions, tipResursa.toLowerCase(), manaPotions);
+
+        // Adaugă informațiile despre noile sisteme
+        System.out.println("\n" + "═".repeat(50));
+        System.out.println(" 🧪 SISTEME ADVANCED");
+        System.out.println("═".repeat(50));
+
+        // Potion tiers
+        System.out.printf("🧪 Berice: %s %s (%d HP/use)\n",
+                healthPotionTier.getIcon(), healthPotionTier.getDisplayName(), getHealthPotionHealing());
+        System.out.printf("💙 Energizat Profi: %s %s (%d %s/use)\n",
+                manaPotionTier.getIcon(), manaPotionTier.getDisplayName(),
+                getManaPotionRestore(), tipResursa);
+
+        // Flask pieces
+        if (!flaskPieces.isEmpty()) {
+            System.out.println("\n🧪 FLASK PIECES:");
+            flaskPieces.forEach((type, quantity) ->
+                    System.out.printf("  %s %s: %d\n", type.getIcon(), type.getDisplayName(), quantity));
+        }
+
+        // Buff potions
+        if (!buffPotions.isEmpty()) {
+            System.out.println("\n✨ BUFF POTIONS:");
+            buffPotions.forEach((type, quantity) ->
+                    System.out.printf("  %s %s: %d\n", type.getIcon(), type.getDisplayName(), quantity));
+        }
+
+        // Enchant scrolls
+        if (!enchantScrolls.isEmpty()) {
+            System.out.println("\n📜 ENCHANT SCROLLS:");
+            enchantScrolls.forEach((type, scroll) ->
+                    System.out.printf("  %s: %d (Nivel %d)\n",
+                            scroll.toString(), scroll.getQuantity(), scroll.getEnchantLevel()));
+        }
+
+        System.out.println("\n");
+
+        // SAORMA REVIVAL TATI
+        if (shaormaRevival > 0) {
+            System.out.printf("🌯 ✨ ȘAORME DE REVIVAL: %d ✨\n", shaormaRevival);
+            System.out.println("   💡 Pot fi folosite pentru reînviere în caz de moarte!");
+        } else {
+            System.out.println("🌯 Șaorme de Revival: 0");
+            System.out.println("   💡 Caută Boss-i pentru a obține această delicatesă rară!");
+        }
+
+
+
+// =================== ECHIPAMENT COMPLET ===================
+        Map<String, ObiectEchipament> currentEquipment = new HashMap<>(echipat);
+
+        int totalEquippedItems = currentEquipment.size();
+
+
+        System.out.println("\n" + "═".repeat(50));
+        System.out.println(" 🎒 ECHIPAMENT COMPLET");
+        System.out.println("═".repeat(50));
+
+        Map<String, String> slotNames = Map.of(
+                "Helmet", "⛑️ Cască",
+                "Armor", "🛡️ Armură",
+                "Gloves", "🧤 Mănuși",
+                "Boots", "🥾 Încălțăminte",
+                "Weapon", "⚔️ Armă principală",
+                "Shield", "🛡️ Scut",
+                "Ring", "💍 Inel",
+                "Necklace", "📿 Colier"
+        );
+
+
+
+
+        for (Map.Entry<String, String> slot : slotNames.entrySet()) {
+            String slotType = slot.getKey();
+            String slotDisplayName = slot.getValue();
+            ObiectEchipament equippedItem = currentEquipment.get(slotType);
+
+            if (equippedItem != null) {
+                System.out.printf("%-20s ✅ %s\n", slotDisplayName + ":", equippedItem.getNume());
+                System.out.printf("%-20s 📊 %s | Nivel %d\n", "",
+                        equippedItem.getRaritate().getDisplayName(),
+                        equippedItem.getNivelNecesar());
+                if (!equippedItem.getBonuses().isEmpty()) {
+                    System.out.printf("%-20s ✨ ", "");
+                    equippedItem.getBonuses().forEach((stat, bonus) ->
+                            System.out.print("+" + bonus + " " + stat + " "));
+                    System.out.println();
+                }
+            } else {
+                System.out.printf("%-20s ❌ [GOL]\n", slotDisplayName + ":");
+                System.out.printf("%-20s 💡 Niciun obiect echipat\n", "");
+            }
+            System.out.println();
+        }
+
+
+        // Calculează statisticile echipamentului
+
+
+        int totalItems = inventar.size();
+
+        System.out.println("═".repeat(50));
+        System.out.printf("📊 SUMAR ECHIPAMENT: %d/%d slot-uri ocupate\n",
+                totalEquippedItems, slotNames.size());
+        System.out.printf("📦 Total obiecte în inventar: %d\n", totalItems);
+
+        // =================== PROGRES ȘI OBIECTIVE ===================
+        System.out.println("\n" + "═".repeat(50));
+        System.out.println("        🏆 PROGRES ȘI OBIECTIVE");
+        System.out.println("═".repeat(50));
+
+        // Progres către următorul nivel
+        double levelProgress = ((double) xp / xpNecesarPentruUrmatoarelNivel) * 100;
+        System.out.printf("📈 Progres level-up: %.1f%%\n", levelProgress);
+
+        // Recomandări bazate pe statistici
+        if (statPoints > 0) {
+            System.out.printf("🎯 Ai %d puncte de stat! Vizitează Trainer-ul pentru upgrade!\n", statPoints);
+        }
+
+        if (totalEquippedItems < slotNames.size()) {
+            int emptySlots = slotNames.size() - totalEquippedItems;
+            System.out.printf("⚠️  %d slot-uri goale! Caută echipament nou în dungeon!\n", emptySlots);
+        }
+
+        if (shaormaRevival == 0) {
+            System.out.println("🌯 Caută Boss-i pentru Șaorme de Revival - îți pot salva viața!");
+        }
+
+        System.out.println("═".repeat(70));
+    }
+
+// metoda pt afisare in dependenta de resursa
+    private String getResourceIcon() {
+        return switch (tipResursa.toLowerCase()) {
+            case "rage" -> "💢";
+            case "energy" -> "⚡";
+            default -> "💙";
+        };
+    }
+
+
+
+    // ================== GETTERI ==================
+
+    public String getNume() { return nume; }
+    public int getNivel() { return nivel; }
+    public int getXp() { return xp; }
+    public int getXpNecesarPentruUrmatoarelNivel() { return xpNecesarPentruUrmatoarelNivel; }
+    public int getViata() { return viata; }
+    public int getViataMaxima() { return viataMaxima; }
+    public int getStrength() { return strength; }
+    public int getDexterity() { return dexterity; }
+    public int getIntelligence() { return intelligence; }
+    public int getDefense() { return defense; }
+    public int getGold() { return gold; }
+    public int getShards() { return shards; }
+    public int getHealthPotions() { return healthPotions; }
+    public int getManaPotions() { return manaPotions; }
+   // public List<ObiectEchipament> getInventar() { return new ArrayList<>(inventar); }
+    public List<Abilitate> getAbilitati() { return new ArrayList<>(abilitati); }
+    public Map<String, BuffStack> getBuffuriActive() { return new HashMap<>(buffuriActive); }
+
+    public int getShaormaRevival() {
+        return shaormaRevival;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s (Nivel %d) [HP: %d/%d | %s: %d/%d | STR: %d DEX: %d INT: %d]",
+                nume, nivel, viata, viataMaxima, tipResursa, resursaCurenta, resursaMaxima,shaormaRevival,
+                getStrengthTotal(), getDexterityTotal(), getIntelligenceTotal());
+    }
+
+    public int getRageMaxim() {
+        return rageMaxim;
+    }
+
+    public void setRageMaxim(int rageMaxim) {
+        this.rageMaxim = rageMaxim;
+    }
+
+    public int getEnergyMaxim() {
+        return energyMaxim;
+    }
+
+    public void setEnergyMaxim(int energyMaxim) {
+        this.energyMaxim = energyMaxim;
+    }
+
+    public int getEnergy() {
+        return energy;
+    }
+
+    public void setEnergy(int energy) {
+        this.energy = energy;
+    }
+
+    public int getRage() {
+        return rage;
+    }
+
+    public void setRage(int rage) {
+        this.rage = rage;
+    }
+
+
+// ==================== GETTERS PENTRU ECHIPAMENT ====================
+
+    public ObiectEchipament getArmaEchipata() {
+        return echipat != null ? echipat.get(ObiectEchipament.TipEchipament.WEAPON.toString()) : null;
+    }
+
+    public ObiectEchipament getArmuraEchipata() {
+        return echipat != null ? echipat.get(ObiectEchipament.TipEchipament.ARMOR.toString()) : null;
+    }
+
+    public ObiectEchipament getAccesoriuEchipat() {
+        return echipat != null ? echipat.get(ObiectEchipament.TipEchipament.RING.toString()) : null;
+    }
+// ==================== ECHIPARE/DEECHIPARE ====================
+
+    public void echipeazaArma(ObiectEchipament arma) {
+        if (arma == null || arma.getTip() != ObiectEchipament.TipEchipament.WEAPON) {
+            return;
+        }
+
+        // Dezechipează arma veche dacă există
+        ObiectEchipament armaVeche = getArmaEchipata();
+        if (armaVeche != null) {
+            inventar.add(armaVeche);
+        }
+
+        // Echipează noua armă
+        if (echipat == null) {
+            echipat = new HashMap<>();
+        }
+        echipat.put(ObiectEchipament.TipEchipament.WEAPON.toString(), arma);
+        inventar.remove(arma);
+
+        // Recalculează statsurile
+        calculateDerivedStats();
+    }
+
+    public void echipeazaArmura(ObiectEchipament armura) {
+        if (armura == null || armura.getTip() != ObiectEchipament.TipEchipament.ARMOR) {
+            return;
+        }
+
+        ObiectEchipament armuraVeche = getArmuraEchipata();
+        if (armuraVeche != null) {
+            inventar.add(armuraVeche);
+        }
+
+        if (echipat == null) {
+            echipat = new HashMap<>();
+        }
+        echipat.put(ObiectEchipament.TipEchipament.ARMOR.toString(), armura);
+        inventar.remove(armura);
+
+        calculateDerivedStats();
+    }
+
+    public void echipeazaAccesoriu(ObiectEchipament accesoriu) {
+        if (accesoriu == null || accesoriu.getTip() != ObiectEchipament.TipEchipament.RING) {
+            return;
+        }
+
+        ObiectEchipament accesoriuVechi = getAccesoriuEchipat();
+        if (accesoriuVechi != null) {
+            inventar.add(accesoriuVechi);
+        }
+
+        if (echipat == null) {
+            echipat = new HashMap<>();
+        }
+        echipat.put(ObiectEchipament.TipEchipament.RING.toString(), accesoriu);
+        inventar.remove(accesoriu);
+
+        calculateDerivedStats();
+    }
+
+
+    public void deechipeazaArma() {
+        ObiectEchipament arma = getArmaEchipata();
+        if (arma != null && echipat != null) {
+            echipat.remove(ObiectEchipament.TipEchipament.WEAPON.toString());
+            inventar.add(arma);
+            calculateDerivedStats();
+        }
+    }
+
+    public void deechipeazaArmura() {
+        ObiectEchipament armura = getArmuraEchipata();
+        if (armura != null && echipat != null) {
+            echipat.remove(ObiectEchipament.TipEchipament.ARMOR.toString());
+            inventar.add(armura);
+            calculateDerivedStats();
+        }
+    }
+
+    public void deechipeazaAccesoriu() {
+        ObiectEchipament accesoriu = getAccesoriuEchipat();
+        if (accesoriu != null && echipat != null) {
+            echipat.remove(ObiectEchipament.TipEchipament.RING.toString());
+            inventar.add(accesoriu);
+            calculateDerivedStats();
+        }
+    }
+
+// ==================== INVENTAR (WRAPPER PENTRU COMPATIBILITATE) ====================
+
+    public InventarWrapper getInventar() {
+        return new InventarWrapper(this);
+    }
+
+    // Clasă internă wrapper pentru inventar
+    public class InventarWrapper {
+        private Erou erou;
+
+        public InventarWrapper(Erou erou) {
+            this.erou = erou;
+        }
+
+        // ========== METODE DE BAZĂ ==========
+
+        public List<ObiectEchipament> getItems() {
+            return erou.inventar;
+        }
+
+        public boolean addItem(ObiectEchipament item) {
+            return erou.inventar.add(item);
+        }
+
+        public boolean removeItem(ObiectEchipament item) {
+            return erou.inventar.remove(item);
+        }
+
+        // ========== METODE NOI NECESARE ==========
+
+        /**
+         * Returnează dimensiunea inventarului
+         */
+        public int size() {
+            return erou.inventar.size();
+        }
+
+        /**
+         * Returnează un stream pentru inventar
+         */
+        public java.util.stream.Stream<ObiectEchipament> stream() {
+            return erou.inventar.stream();
+        }
+
+        /**
+         * Șterge un obiect din inventar (alias pentru removeItem)
+         */
+        public boolean remove(ObiectEchipament item) {
+            return removeItem(item);
+        }
+
+        /**
+         * Verifică dacă un item este echipat
+         */
+        public boolean isEquipped(ObiectEchipament item) {
+            return item != null && item.isEquipped();
+        }
+
+        public int getCapacitateMaxima() {
+            return 50; // Sau orice capacitate maximă dorești
+        }
+
+
+        // ========== POȚIUNI VINDECARE ==========
+
+        private Map<Integer, Integer> healthPotionsMap = new HashMap<>();
+
+        public Map<Integer, Integer> getHealthPotions() {
+            // 🔄 MIGRARE AUTOMATĂ din sistemul vechi
+            if (healthPotionsMap.isEmpty() && erou.healthPotions > 0) {
+                // Migrează poțiunile vechi în noul sistem
+                int healAmount = erou.getHealthPotionHealing(); // Folosește tier-ul actual
+                healthPotionsMap.put(healAmount, erou.healthPotions);
+
+                System.out.printf("🔄 MIGRATED: %d poțiuni vechi → %d HP heal amount\\n",
+                        erou.healthPotions, healAmount);
+
+                // Opțional: resetează sistemul vechi pentru a evita confuzia
+                // erou.healthPotions = 0;
+            }
+            return healthPotionsMap;
+        }
+
+        public boolean hasHealthPotion(int healAmount) {
+            return healthPotionsMap.getOrDefault(healAmount, 0) > 0;
+        }
+
+        public void removeHealthPotion(int healAmount) {
+            int current = healthPotionsMap.getOrDefault(healAmount, 0);
+            if (current > 1) {
+                healthPotionsMap.put(healAmount, current - 1);
+            } else {
+                healthPotionsMap.remove(healAmount);
+            }
+        }
+
+        public void addHealthPotion(int healAmount) {
+            healthPotionsMap.merge(healAmount, 1, Integer::sum);
+        }
+
+
+
+        // ========== POȚIUNI BUFF ==========
+
+        private Map<BuffPotion.BuffType, Integer> buffPotionsMap = new HashMap<>();
+
+        public Map<BuffPotion.BuffType, Integer> getBuffPotions() {
+            return buffPotionsMap;
+        }
+
+        public boolean hasBuffPotion(BuffPotion.BuffType type) {
+            return buffPotionsMap.getOrDefault(type, 0) > 0;
+        }
+
+        public void removeBuffPotion(BuffPotion.BuffType type) {
+            int current = buffPotionsMap.getOrDefault(type, 0);
+            if (current > 1) {
+                buffPotionsMap.put(type, current - 1);
+            } else {
+                buffPotionsMap.remove(type);
+            }
+        }
+
+        public void addBuffPotion(BuffPotion.BuffType type, int quantity) {
+            buffPotionsMap.merge(type, quantity, Integer::sum);
+        }
+
+        // ========== ENCHANT SCROLLS ==========
+
+        private List<EnchantScroll> enchantScrolls = new ArrayList<>();
+
+        public List<EnchantScroll> getEnchantScrolls() {
+            return enchantScrolls;
+        }
+
+        public void addEnchantScroll(EnchantScroll scroll) {
+            enchantScrolls.add(scroll);
+        }
+
+        public boolean removeEnchantScroll(EnchantScroll scroll) {
+            return enchantScrolls.remove(scroll);
+        }
+
+        // 🆕 METODĂ NOUĂ - Verifică dacă există scroll-uri
+        public boolean hasEnchantScroll() {
+            return !enchantScrolls.isEmpty();
+        }
+
+        // 🆕 METODĂ NOUĂ - Șterge primul scroll (fără argument)
+        public EnchantScroll removeEnchantScroll() {
+            if (!enchantScrolls.isEmpty()) {
+                return enchantScrolls.remove(0);
+            }
+            return null;
+        }
+
+        // 🆕 METODĂ NOUĂ - Verifică dacă există un scroll specific de un tip
+        public boolean hasEnchantScrollOfType(EnchantScroll.EnchantType type) {
+            return enchantScrolls.stream()
+                    .anyMatch(scroll -> scroll.getType() == type);
+        }
+
+        // 🆕 METODĂ NOUĂ - Șterge primul scroll de un tip specific
+        public boolean removeEnchantScrollOfType(EnchantScroll.EnchantType type) {
+            for (int i = 0; i < enchantScrolls.size(); i++) {
+                if (enchantScrolls.get(i).getType() == type) {
+                    enchantScrolls.remove(i);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // 🆕 METODĂ NOUĂ - Obține primul scroll disponibil
+        public EnchantScroll getFirstEnchantScroll() {
+            return enchantScrolls.isEmpty() ? null : enchantScrolls.get(0);
+        }
+
+        // 🆕 METODĂ NOUĂ - Numărul de scroll-uri
+        public int getEnchantScrollCount() {
+            return enchantScrolls.size();
+        }
+
+        // Flask pieces
+        private List<FlaskPiece> flaskPieces = new ArrayList<>();
+
+        public List<FlaskPiece> getFlaskPieces() {
+            return flaskPieces;
+        }
+
+
+    }
+
+
+    // ========== FLASK PIECES ==========
+
+   // private List<FlaskPiece> flaskPieces = new ArrayList<>();
+//
+//    public List<FlaskPiece> getFlaskPieces() {
+//        return flaskPieces;
+//    }
+//
+//    public void addFlaskPiece(FlaskPiece piece) {
+//        flaskPieces.add(piece);
+//    }
+//
+//    public boolean removeFlaskPiece(FlaskPiece piece) {
+//        return flaskPieces.remove(piece);
+//    }
+
+
+// ==================== METODE PENTRU POȚIUNI ====================
+
+    public void addHealthPotion(int healAmount) {
+        getInventar().getHealthPotions().merge(healAmount, 1, Integer::sum);
+    }
+//
+//    public void addBuffPotion(BuffPotion.BuffType type, int quantity) {
+//        getInventar().getBuffPotions().merge(type, quantity, Integer::sum);
+//    }
+
+    public void aplicaBuff(BuffPotion.BuffType buffType) {
+        // Implementează logica de aplicare buff
+        String buffName = buffType.getDisplayName();
+        int duration = buffType.getDuration();
+        Map<String, Double> effect = buffType.getEffect();
+
+        // CORECT: constructor este (Map, int durata, int maxStacks)
+        BuffStack buff = new BuffStack(effect, duration, 1);
+        buffuriActive.put(buffName, buff);
+    }
+
+    public void addEnchantScroll(EnchantScroll scroll) {
+        getInventar().getEnchantScrolls().add(scroll);
+    }
+
+// ==================== METODE PENTRU SHARDS ====================
+
+//    public int getShards() {
+//        return shards;
+//    }
+
+    public void consumeShards(int amount) {
+        shards = Math.max(0, shards - amount);
+    }
+
+// ==================== METODE PENTRU RESURSE ====================
+
+//    public int getResursaCurenta() {
+//        return resursaCurenta;
+//    }
+//
+//    public int getResursaMaxima() {
+//        return resursaMaxima;
+//    }
+//
+//    public String getTipResursa() {
+//        return tipResursa;
+//    }
+
+//    public void setTipResursa(String tipResursa) {
+//        this.tipResursa = tipResursa;
+//    }
+//
+//    public void consumaResursa(int amount) {
+//        resursaCurenta = Math.max(0, resursaCurenta - amount);
+//    }
+//
+//    public void regenereazaResursa(int amount) {
+//        resursaCurenta = Math.min(resursaMaxima, resursaCurenta + amount);
+//    }
+
+// ==================== METODE PENTRU COMBAT ====================
+
+    public int calculeazaDamage() {
+        // Calculează damage-ul bazat pe strength și echipament
+        int baseDamage = strength * 2;
+
+        ObiectEchipament arma = getArmaEchipata();
+        if (arma != null) {
+            baseDamage += arma.getTotalBonuses().getOrDefault("Damage", 0);
+        }
+
+        return baseDamage;
+    }
+
+    public int primesteDamage(int damage) {
+        int finalDamage = Math.max(10, damage - defense);
+        viata = Math.max(0, viata - finalDamage);
+        return finalDamage;
+    }
+
+//    public boolean esteViu() {
+//        return viata > 0;
+//    }
+
+// ==================== METODE PENTRU STATS ====================
+//
+//    public int getStrength() {
+//        return strength;
+//    }
+//
+//    public int getDexterity() {
+//        return dexterity;
+//    }
+//
+//    public int getIntelligence() {
+//        return intelligence;
+//    }
+//
+//    public void increaseStrength(int amount) {
+//        strength += amount;
+//        calculateDerivedStats();
+//    }
+//
+//    public void increaseDexterity(int amount) {
+//        dexterity += amount;
+//        calculateDerivedStats();
+//    }
+//
+//    public void increaseIntelligence(int amount) {
+//        intelligence += amount;
+//        calculateDerivedStats();
+//    }
+
+    public int getStatPointsToAllocate() {
+        return statPoints;
+    }
+
+//    public void decreaseStatPoints(int amount) {
+//        statPoints = Math.max(0, statPoints - amount);
+//    }
+
+// ==================== METODE PENTRU XP ====================
+//
+//    public void adaugaXp(int amount) {
+//        xp += amount;
+//        checkLevelUp();
+//    }
+
+    private void checkLevelUp() {
+        while (xp >= xpNecesarPentruUrmatoarelNivel) {
+            xp -= xpNecesarPentruUrmatoarelNivel;
+            nivel++;
+            statPoints += 2; // Câștigi 2 stat points per nivel
+            xpNecesarPentruUrmatoarelNivel = (int)(xpNecesarPentruUrmatoarelNivel * 1.5);
+
+            // Recalculează stats
+            calculateDerivedStats();
+
+            // Opțional: vindecă complet la level up
+            viata = viataMaxima;
+            resursaCurenta = resursaMaxima;
+        }
+    }
+
+    public int getExperienta() {
+        return xp;
+    }
+
+    public int getExpNecesara() {
+        return xpNecesarPentruUrmatoarelNivel;
+    }
+
+// ==================== METODE PENTRU ȘAORMA ====================
+
+    public int getShaormaRevivalCount() {
+        return shaormaRevival;
+    }
+
+//    public void adaugaShaormaRevival(int count) {
+//        shaormaRevival += count;
+//    }
+//
+//    public boolean areShaormaRevival() {
+//        return shaormaRevival > 0;
+//    }
+//
+//    public boolean folosesteShaormaRevival() {
+//        if (shaormaRevival > 0) {
+//            shaormaRevival--;
+//            viata = viataMaxima / 2; // Revine cu 50% HP
+//            resursaCurenta = resursaMaxima / 2;
+//            return true;
+//        }
+//        return false;
+//    }
+
+// ==================== METODE PENTRU ABILITĂȚI ====================
+
+//    public List<Abilitate> getAbilitati() {
+//        return abilitati;
+//    }
+//
+//    public void adaugaAbilitate(Abilitate abilitate) {
+//        if (!abilitati.contains(abilitate)) {
+//            abilitati.add(abilitate);
+//        }
+//    }
+
+// ==================== METODE GETTER/SETTER PENTRU HP ====================
+//
+//    public int getViata() {
+//        return viata;
+//    }
+//
+//    public int getViataMaxima() {
+//        return viataMaxima;
+//    }
+//
+//    public void setViataCurenta(int viata) {
+//        this.viata = Math.min(viata, viataMaxima);
+//    }
+
+// ==================== METODE AUXILIARE ====================
+
+//    /**
+//     * Afișează meniul de moarte (pentru compatibilitate cu codul vechi)
+//     */
+//    public void afiseazaMeniuMoarte() {
+//        System.out.println("\n💀 ═══════════════════════════════════════════════════ 💀");
+//        System.out.println("                    AI MURIT!");
+//        System.out.println("💀 ═══════════════════════════════════════════════════ 💀");
+//        System.out.println();
+//        System.out.printf("⚰️  %s a căzut în luptă...\n", nume);
+//        System.out.printf("📊 Nivel atins: %d\n", nivel);
+//        System.out.printf("💰 Gold acumulat: %d\n", gold);
+//        System.out.println();
+//    }
+
+    /**
+     * Afișează status complet (pentru compatibilitate)
+     */
+//    public void afiseazaStatusComplet() {
+//        System.out.println("\n╔═══════════════════════════════════════════╗");
+//        System.out.println("║         STATUS COMPLET EROU               ║");
+//        System.out.println("╚═══════════════════════════════════════════╝");
+//        System.out.println();
+//        System.out.printf("👤 Nume: %s\n", nume);
+//        System.out.printf("⭐ Nivel: %d\n", nivel);
+//        System.out.printf("📊 XP: %d / %d\n", xp, xpNecesarPentruUrmatoarelNivel);
+//        System.out.println();
+//        System.out.printf("❤️  HP: %d / %d\n", viata, viataMaxima);
+//        System.out.printf("💙 %s: %d / %d\n", tipResursa, resursaCurenta, resursaMaxima);
+//        System.out.println();
+//        System.out.printf("💪 Strength: %d\n", strength);
+//        System.out.printf("🎯 Dexterity: %d\n", dexterity);
+//        System.out.printf("🧠 Intelligence: %d\n", intelligence);
+//        System.out.printf("🛡️  Defense: %d\n", defense);
+//        System.out.println();
+//        System.out.printf("💰 Gold: %d\n", gold);
+//        System.out.printf("🔮 Shards: %d\n", shards);
+//        System.out.printf("⭐ Stat Points: %d\n", statPoints);
+//        System.out.println();
+//    }
+
+}
