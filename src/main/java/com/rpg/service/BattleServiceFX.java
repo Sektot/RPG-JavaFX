@@ -443,10 +443,10 @@ public class BattleServiceFX {
             );
         }
 
-        // Consumă poțiunea și regenerează resursa
         int oldResource = hero.getResursaCurenta();
-        hero.regenereazaResursa(restoreAmount);
+       // hero.regenereazaResursa(restoreAmount); // ✅ Folosește parametrul, nu getManaPotionRestore()
         int actualRestore = hero.getResursaCurenta() - oldResource;
+
 
         // Scade poțiunea folosind metoda din Erou
         boolean potionUsed = hero.useManaPotion();
@@ -487,7 +487,8 @@ public class BattleServiceFX {
                 hero.getViata(), hero.getViataMaxima(),
                 hero.getResursaCurenta(), hero.getResursaMaxima(),
                 enemy.getViata(), enemy.getViataMaxima(),
-                new ArrayList<>()
+                getAvailableAbilities(hero)
+
         );
 
         // ✅ Constructorul CORECT cu 5 parametri

@@ -84,6 +84,8 @@ public class GameConstants {
     // ==================== POTIONS ====================
     public static final int HEALTH_POTION_HEAL = 30;
     public static final int MANA_POTION_RESTORE = 25;
+    public static final int SIMPLE_MANA_POTION_RESTORE = 25; // sau ce valoare vrei
+
 
     // ==================== BUFFS/DEBUFFS ====================
     public static final int MAX_BUFF_STACKS = 3;

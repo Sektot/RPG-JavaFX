@@ -7,6 +7,7 @@ import com.rpg.model.items.EnchantScroll;
 import com.rpg.model.items.FlaskPiece;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.PotionUpgradeService;
+import com.rpg.service.dto.EquipResult;
 import com.rpg.utils.GameConstants;
 
 import java.io.Serial;
@@ -69,6 +70,17 @@ public class Erou implements Serializable {
 
     // Echipament
     private Map<String, ObiectEchipament> echipat;
+
+    // Slot-urile noi
+    public static final String MAIN_HAND = "MAIN_HAND";
+    public static final String OFF_HAND = "OFF_HAND";
+    public static final String ARMOR = "ARMOR";
+    public static final String HELMET = "HELMET";
+    public static final String GLOVES = "GLOVES";
+    public static final String BOOTS = "BOOTS";
+    public static final String RING1 = "RING1";
+    public static final String RING2 = "RING2";
+    public static final String NECKLACE = "NECKLACE";
 
 //baza pentru a construi orice erou
     public Erou(String nume, int strength, int dexterity, int intelligence) {
@@ -375,17 +387,17 @@ public class Erou implements Serializable {
         return intelligence + getEquipmentBonus("intelligence");
     }
 
-    // un getter pt bonusurile de la echipamente
-    private int getEquipmentBonus(String stat) {
-        int bonus = 0;
-        for (ObiectEchipament item : echipat.values()) {
-            if (item != null && item.getBonuses() != null && item.getBonuses().containsKey(stat)) {
-                bonus += item.getBonuses().get(stat);
-            }
-        }
-        //returneaza un int cu bonusurile
-        return bonus;
-    }
+//    // un getter pt bonusurile de la echipamente
+//    private int getEquipmentBonus(String stat) {
+//        int bonus = 0;
+//        for (ObiectEchipament item : echipat.values()) {
+//            if (item != null && item.getBonuses() != null && item.getBonuses().containsKey(stat)) {
+//                bonus += item.getBonuses().get(stat);
+//            }
+//        }
+//        //returneaza un int cu bonusurile
+//        return bonus;
+//    }
 
     // Getteri de resurse mana si alea alea=====================
 
@@ -878,8 +890,8 @@ public boolean useManaPotion() {
             return false;
         }
 
-        // Verifică dacă e armă
-        if (weapon.getTip() != ObiectEchipament.TipEchipament.WEAPON) {
+// FOLOSEȘTE:
+        if (!weapon.isWeapon()) {
             System.out.println("❌ Enchant scrolls pot fi folosite doar pe arme!");
             return false;
         }
@@ -1228,106 +1240,325 @@ public boolean useManaPotion() {
 
 // ==================== GETTERS PENTRU ECHIPAMENT ====================
 
+    public ObiectEchipament getMainHandWeapon() {
+        return echipat != null ? echipat.get(MAIN_HAND) : null;
+    }
+
+    public ObiectEchipament getOffHandItem() {
+        return echipat != null ? echipat.get(OFF_HAND) : null;
+    }
+
+    public ObiectEchipament getArmorEquipped() {
+        return echipat != null ? echipat.get(ARMOR) : null;
+    }
+
+    public ObiectEchipament getHelmetEquipped() {
+        return echipat != null ? echipat.get(HELMET) : null;
+    }
+
+    public ObiectEchipament getGlovesEquipped() {
+        return echipat != null ? echipat.get(GLOVES) : null;
+    }
+
+    public ObiectEchipament getBootsEquipped() {
+        return echipat != null ? echipat.get(BOOTS) : null;
+    }
+
+    public ObiectEchipament getRing1Equipped() {
+        return echipat != null ? echipat.get(RING1) : null;
+    }
+
+    public ObiectEchipament getRing2Equipped() {
+        return echipat != null ? echipat.get(RING2) : null;
+    }
+
+    public ObiectEchipament getNecklaceEquipped() {
+        return echipat != null ? echipat.get(NECKLACE) : null;
+    }
+
+
+// ==================== COMPATIBILITATE CU CODUL VECHI ====================
+
+    // Pentru compatibilitate cu InventoryServiceFX
     public ObiectEchipament getArmaEchipata() {
-        return echipat != null ? echipat.get(ObiectEchipament.TipEchipament.WEAPON.toString()) : null;
+        return getMainHandWeapon();
     }
 
     public ObiectEchipament getArmuraEchipata() {
-        return echipat != null ? echipat.get(ObiectEchipament.TipEchipament.ARMOR.toString()) : null;
+        return getArmorEquipped();
     }
 
     public ObiectEchipament getAccesoriuEchipat() {
-        return echipat != null ? echipat.get(ObiectEchipament.TipEchipament.RING.toString()) : null;
+        // Returnează primul accesoriu găsit (pentru compatibilitate)
+        if (getRing1Equipped() != null) return getRing1Equipped();
+        if (getRing2Equipped() != null) return getRing2Equipped();
+        if (getNecklaceEquipped() != null) return getNecklaceEquipped();
+        if (getHelmetEquipped() != null) return getHelmetEquipped();
+        if (getGlovesEquipped() != null) return getGlovesEquipped();
+        if (getBootsEquipped() != null) return getBootsEquipped();
+        return null;
     }
-// ==================== ECHIPARE/DEECHIPARE ====================
 
-    public void echipeazaArma(ObiectEchipament arma) {
-        if (arma == null || arma.getTip() != ObiectEchipament.TipEchipament.WEAPON) {
-            return;
+    // ==================== METODE DE ECHIPARE AVANSATĂ ====================
+
+    /**
+     * 🎯 MASTER EQUIP METHOD - Gestionează toate tipurile de echipament
+     */
+    public EquipResult equipItem(ObiectEchipament item) {
+        if (item == null || nivel < item.getNivelNecesar()) {
+            return new EquipResult(false, "Nivel insuficient!", null);
         }
 
-        // Dezechipează arma veche dacă există
-        ObiectEchipament armaVeche = getArmaEchipata();
-        if (armaVeche != null) {
-            inventar.add(armaVeche);
-        }
-
-        // Echipează noua armă
         if (echipat == null) {
             echipat = new HashMap<>();
         }
-        echipat.put(ObiectEchipament.TipEchipament.WEAPON.toString(), arma);
-        inventar.remove(arma);
 
-        // Recalculează statsurile
-        calculateDerivedStats();
+        try {
+            return switch (item.getTip()) {
+                case WEAPON_ONE_HANDED -> equipOneHandedWeapon(item);
+                case WEAPON_TWO_HANDED -> equipTwoHandedWeapon(item);
+                case SHIELD -> equipShield(item);
+                case OFF_HAND_WEAPON -> equipOffHandWeapon(item);
+                case OFF_HAND_MAGIC -> equipOffHandMagic(item);
+                case ARMOR -> equipInSlot(item, ARMOR);
+                case HELMET -> equipInSlot(item, HELMET);
+                case GLOVES -> equipInSlot(item, GLOVES);
+                case BOOTS -> equipInSlot(item, BOOTS);
+                case RING -> equipRing(item);
+                case NECKLACE -> equipInSlot(item, NECKLACE);
+                default -> new EquipResult(false, "Tip de echipament necunoscut!", null);
+            };
+        } finally {
+            calculateDerivedStats(); // Recalculează după echipare
+            inventar.remove(item); // Scoate din inventar
+        }
+    }
+
+    /**
+     * ⚔️ Echipare armă one-handed
+     */
+    private EquipResult equipOneHandedWeapon(ObiectEchipament weapon) {
+        List<ObiectEchipament> unequippedItems = new ArrayList<>();
+
+        // Verifică dacă avem two-handed în main hand
+        ObiectEchipament mainHand = getMainHandWeapon();
+        if (mainHand != null && mainHand.isTwoHanded()) {
+            unequippedItems.add(mainHand);
+            echipat.remove(MAIN_HAND);
+            inventar.add(mainHand);
+        }
+
+        // Echipează în main hand
+        ObiectEchipament oldMainHand = echipat.put(MAIN_HAND, weapon);
+        if (oldMainHand != null) {
+            unequippedItems.add(oldMainHand);
+            inventar.add(oldMainHand);
+        }
+
+        return new EquipResult(true,
+                "Echipat în main hand: " + weapon.getNume(),
+                unequippedItems.isEmpty() ? null : unequippedItems.get(0));
+    }
+
+    /**
+     * 🗡️ Echipare armă two-handed
+     */
+    private EquipResult equipTwoHandedWeapon(ObiectEchipament weapon) {
+        List<ObiectEchipament> unequippedItems = new ArrayList<>();
+
+        // Dezechipează main hand și off hand
+        ObiectEchipament mainHand = echipat.remove(MAIN_HAND);
+        ObiectEchipament offHand = echipat.remove(OFF_HAND);
+
+        if (mainHand != null) {
+            unequippedItems.add(mainHand);
+            inventar.add(mainHand);
+        }
+        if (offHand != null) {
+            unequippedItems.add(offHand);
+            inventar.add(offHand);
+        }
+
+        // Echipează two-handed în main hand
+        echipat.put(MAIN_HAND, weapon);
+
+        return new EquipResult(true,
+                "Echipat two-handed: " + weapon.getNume() +
+                        (unequippedItems.size() > 0 ? " (dezechipat: " + unequippedItems.size() + " items)" : ""),
+                unequippedItems.isEmpty() ? null : unequippedItems.get(0));
+    }
+
+    /**
+     * 🛡️ Echipare scut
+     */
+    private EquipResult equipShield(ObiectEchipament shield) {
+        // Verifică dacă avem two-handed weapon
+        ObiectEchipament mainHand = getMainHandWeapon();
+        if (mainHand != null && mainHand.isTwoHanded()) {
+            return new EquipResult(false,
+                    "Nu poți folosi scut cu " + mainHand.getNume() + " (two-handed)!", null);
+        }
+
+        return equipInSlot(shield, OFF_HAND);
+    }
+
+    /**
+     * ⚔️ Echipare off-hand weapon
+     */
+    private EquipResult equipOffHandWeapon(ObiectEchipament weapon) {
+        // Verifică dacă avem two-handed weapon
+        ObiectEchipament mainHand = getMainHandWeapon();
+        if (mainHand != null && mainHand.isTwoHanded()) {
+            return new EquipResult(false,
+                    "Nu poți folosi off-hand cu " + mainHand.getNume() + " (two-handed)!", null);
+        }
+
+        return equipInSlot(weapon, OFF_HAND);
+    }
+
+    /**
+     * 📖 Echipare off-hand magic
+     */
+    private EquipResult equipOffHandMagic(ObiectEchipament item) {
+        ObiectEchipament mainHand = getMainHandWeapon();
+        if (mainHand != null && mainHand.isTwoHanded()) {
+            return new EquipResult(false,
+                    "Nu poți folosi off-hand cu " + mainHand.getNume() + " (two-handed)!", null);
+        }
+
+        return equipInSlot(item, OFF_HAND);
+    }
+
+    /**
+     * 💍 Echipare ring (găsește primul slot liber)
+     */
+    private EquipResult equipRing(ObiectEchipament ring) {
+        if (getRing1Equipped() == null) {
+            return equipInSlot(ring, RING1);
+        } else if (getRing2Equipped() == null) {
+            return equipInSlot(ring, RING2);
+        } else {
+            // Înlocuiește primul ring
+            return equipInSlot(ring, RING1);
+        }
+    }
+
+    /**
+     * 🎯 Helper pentru echipare în slot specific
+     */
+    private EquipResult equipInSlot(ObiectEchipament item, String slot) {
+        ObiectEchipament oldItem = echipat.put(slot, item);
+
+        if (oldItem != null) {
+            inventar.add(oldItem);
+            return new EquipResult(true,
+                    "Echipat: " + item.getNume() + " (înlocuit: " + oldItem.getNume() + ")",
+                    oldItem);
+        }
+
+        return new EquipResult(true, "Echipat: " + item.getNume(), null);
+    }
+
+    // ==================== DEECHIPARE ====================
+
+    /**
+     * Deechipează un item din slot
+     */
+    public EquipResult unequipFromSlot(String slot) {
+        if (echipat == null) return new EquipResult(false, "Niciun echipament!", null);
+
+        ObiectEchipament item = echipat.remove(slot);
+        if (item != null) {
+            inventar.add(item);
+            calculateDerivedStats();
+            return new EquipResult(true, "Deechipat: " + item.getNume(), item);
+        }
+
+        return new EquipResult(false, "Slot gol!", null);
+    }
+
+    // ==================== COMPATIBILITATE CU CODUL VECHI ====================
+
+    public void echipeazaArma(ObiectEchipament arma) {
+        equipItem(arma);
     }
 
     public void echipeazaArmura(ObiectEchipament armura) {
-        if (armura == null || armura.getTip() != ObiectEchipament.TipEchipament.ARMOR) {
-            return;
-        }
-
-        ObiectEchipament armuraVeche = getArmuraEchipata();
-        if (armuraVeche != null) {
-            inventar.add(armuraVeche);
-        }
-
-        if (echipat == null) {
-            echipat = new HashMap<>();
-        }
-        echipat.put(ObiectEchipament.TipEchipament.ARMOR.toString(), armura);
-        inventar.remove(armura);
-
-        calculateDerivedStats();
+        equipItem(armura);
     }
 
     public void echipeazaAccesoriu(ObiectEchipament accesoriu) {
-        if (accesoriu == null || accesoriu.getTip() != ObiectEchipament.TipEchipament.RING) {
-            return;
-        }
-
-        ObiectEchipament accesoriuVechi = getAccesoriuEchipat();
-        if (accesoriuVechi != null) {
-            inventar.add(accesoriuVechi);
-        }
-
-        if (echipat == null) {
-            echipat = new HashMap<>();
-        }
-        echipat.put(ObiectEchipament.TipEchipament.RING.toString(), accesoriu);
-        inventar.remove(accesoriu);
-
-        calculateDerivedStats();
+        equipItem(accesoriu);
     }
 
-
     public void deechipeazaArma() {
-        ObiectEchipament arma = getArmaEchipata();
-        if (arma != null && echipat != null) {
-            echipat.remove(ObiectEchipament.TipEchipament.WEAPON.toString());
-            inventar.add(arma);
-            calculateDerivedStats();
-        }
+        unequipFromSlot(MAIN_HAND);
     }
 
     public void deechipeazaArmura() {
-        ObiectEchipament armura = getArmuraEchipata();
-        if (armura != null && echipat != null) {
-            echipat.remove(ObiectEchipament.TipEchipament.ARMOR.toString());
-            inventar.add(armura);
-            calculateDerivedStats();
-        }
+        unequipFromSlot(ARMOR);
     }
 
     public void deechipeazaAccesoriu() {
-        ObiectEchipament accesoriu = getAccesoriuEchipat();
-        if (accesoriu != null && echipat != null) {
-            echipat.remove(ObiectEchipament.TipEchipament.RING.toString());
-            inventar.add(accesoriu);
-            calculateDerivedStats();
-        }
+        // Deechipează primul accesoriu găsit
+        if (getRing1Equipped() != null) unequipFromSlot(RING1);
+        else if (getRing2Equipped() != null) unequipFromSlot(RING2);
+        else if (getNecklaceEquipped() != null) unequipFromSlot(NECKLACE);
+        else if (getHelmetEquipped() != null) unequipFromSlot(HELMET);
+        else if (getGlovesEquipped() != null) unequipFromSlot(GLOVES);
+        else if (getBootsEquipped() != null) unequipFromSlot(BOOTS);
     }
+
+    // ==================== ACTUALIZARE CALCUL BONUSURI ====================
+
+    /**
+     * Calculează toate bonusurile din echipament
+     */
+    private int getEquipmentBonus(String stat) {
+        if (echipat == null) return 0;
+
+        int bonus = 0;
+        for (ObiectEchipament item : echipat.values()) {
+            if (item != null) {
+                Map<String, Integer> itemBonuses = item.getTotalBonuses();
+                bonus += itemBonuses.getOrDefault(stat, 0);
+            }
+        }
+        return bonus;
+    }
+
+    /**
+     * Calculează damage-ul de combat (cu ambele mâini)
+     */
+    public int calculeazaDamageTotal() {
+        int totalDamage = strength * 2; // Base damage
+
+        // Main hand weapon
+        ObiectEchipament mainHand = getMainHandWeapon();
+        if (mainHand != null) {
+            Map<String, Integer> bonuses = mainHand.getTotalBonuses();
+            totalDamage += bonuses.getOrDefault("Damage", 0);
+            totalDamage += bonuses.getOrDefault("damage_bonus", 0);
+            totalDamage += bonuses.getOrDefault("attack_bonus", 0);
+        }
+
+        // Off hand weapon (la 50% eficiență)
+        ObiectEchipament offHand = getOffHandItem();
+        if (offHand != null && offHand.canEquipInOffHand() &&
+                (offHand.getTip() == ObiectEchipament.TipEchipament.OFF_HAND_WEAPON ||
+                        offHand.getTip() == ObiectEchipament.TipEchipament.WEAPON_ONE_HANDED)) {
+            Map<String, Integer> bonuses = offHand.getTotalBonuses();
+            totalDamage += (bonuses.getOrDefault("Damage", 0) / 2); // 50% pentru off-hand
+            totalDamage += (bonuses.getOrDefault("damage_bonus", 0) / 2);
+        }
+
+        return totalDamage;
+    }
+
+
+
+
+
 
 // ==================== INVENTAR (WRAPPER PENTRU COMPATIBILITATE) ====================
 
@@ -1522,33 +1753,12 @@ public boolean useManaPotion() {
 
     }
 
-
-    // ========== FLASK PIECES ==========
-
-   // private List<FlaskPiece> flaskPieces = new ArrayList<>();
-//
-//    public List<FlaskPiece> getFlaskPieces() {
-//        return flaskPieces;
-//    }
-//
-//    public void addFlaskPiece(FlaskPiece piece) {
-//        flaskPieces.add(piece);
-//    }
-//
-//    public boolean removeFlaskPiece(FlaskPiece piece) {
-//        return flaskPieces.remove(piece);
-//    }
-
-
 // ==================== METODE PENTRU POȚIUNI ====================
 
     public void addHealthPotion(int healAmount) {
         getInventar().getHealthPotions().merge(healAmount, 1, Integer::sum);
     }
-//
-//    public void addBuffPotion(BuffPotion.BuffType type, int quantity) {
-//        getInventar().getBuffPotions().merge(type, quantity, Integer::sum);
-//    }
+
 
     public void aplicaBuff(BuffPotion.BuffType buffType) {
         // Implementează logica de aplicare buff
@@ -1565,41 +1775,12 @@ public boolean useManaPotion() {
         getInventar().getEnchantScrolls().add(scroll);
     }
 
-// ==================== METODE PENTRU SHARDS ====================
 
-//    public int getShards() {
-//        return shards;
-//    }
 
     public void consumeShards(int amount) {
         shards = Math.max(0, shards - amount);
     }
 
-// ==================== METODE PENTRU RESURSE ====================
-
-//    public int getResursaCurenta() {
-//        return resursaCurenta;
-//    }
-//
-//    public int getResursaMaxima() {
-//        return resursaMaxima;
-//    }
-//
-//    public String getTipResursa() {
-//        return tipResursa;
-//    }
-
-//    public void setTipResursa(String tipResursa) {
-//        this.tipResursa = tipResursa;
-//    }
-//
-//    public void consumaResursa(int amount) {
-//        resursaCurenta = Math.max(0, resursaCurenta - amount);
-//    }
-//
-//    public void regenereazaResursa(int amount) {
-//        resursaCurenta = Math.min(resursaMaxima, resursaCurenta + amount);
-//    }
 
 // ==================== METODE PENTRU COMBAT ====================
 
@@ -1621,53 +1802,11 @@ public boolean useManaPotion() {
         return finalDamage;
     }
 
-//    public boolean esteViu() {
-//        return viata > 0;
-//    }
-
-// ==================== METODE PENTRU STATS ====================
-//
-//    public int getStrength() {
-//        return strength;
-//    }
-//
-//    public int getDexterity() {
-//        return dexterity;
-//    }
-//
-//    public int getIntelligence() {
-//        return intelligence;
-//    }
-//
-//    public void increaseStrength(int amount) {
-//        strength += amount;
-//        calculateDerivedStats();
-//    }
-//
-//    public void increaseDexterity(int amount) {
-//        dexterity += amount;
-//        calculateDerivedStats();
-//    }
-//
-//    public void increaseIntelligence(int amount) {
-//        intelligence += amount;
-//        calculateDerivedStats();
-//    }
 
     public int getStatPointsToAllocate() {
         return statPoints;
     }
 
-//    public void decreaseStatPoints(int amount) {
-//        statPoints = Math.max(0, statPoints - amount);
-//    }
-
-// ==================== METODE PENTRU XP ====================
-//
-//    public void adaugaXp(int amount) {
-//        xp += amount;
-//        checkLevelUp();
-//    }
 
     private void checkLevelUp() {
         while (xp >= xpNecesarPentruUrmatoarelNivel) {
@@ -1699,90 +1838,5 @@ public boolean useManaPotion() {
         return shaormaRevival;
     }
 
-//    public void adaugaShaormaRevival(int count) {
-//        shaormaRevival += count;
-//    }
-//
-//    public boolean areShaormaRevival() {
-//        return shaormaRevival > 0;
-//    }
-//
-//    public boolean folosesteShaormaRevival() {
-//        if (shaormaRevival > 0) {
-//            shaormaRevival--;
-//            viata = viataMaxima / 2; // Revine cu 50% HP
-//            resursaCurenta = resursaMaxima / 2;
-//            return true;
-//        }
-//        return false;
-//    }
-
-// ==================== METODE PENTRU ABILITĂȚI ====================
-
-//    public List<Abilitate> getAbilitati() {
-//        return abilitati;
-//    }
-//
-//    public void adaugaAbilitate(Abilitate abilitate) {
-//        if (!abilitati.contains(abilitate)) {
-//            abilitati.add(abilitate);
-//        }
-//    }
-
-// ==================== METODE GETTER/SETTER PENTRU HP ====================
-//
-//    public int getViata() {
-//        return viata;
-//    }
-//
-//    public int getViataMaxima() {
-//        return viataMaxima;
-//    }
-//
-//    public void setViataCurenta(int viata) {
-//        this.viata = Math.min(viata, viataMaxima);
-//    }
-
-// ==================== METODE AUXILIARE ====================
-
-//    /**
-//     * Afișează meniul de moarte (pentru compatibilitate cu codul vechi)
-//     */
-//    public void afiseazaMeniuMoarte() {
-//        System.out.println("\n💀 ═══════════════════════════════════════════════════ 💀");
-//        System.out.println("                    AI MURIT!");
-//        System.out.println("💀 ═══════════════════════════════════════════════════ 💀");
-//        System.out.println();
-//        System.out.printf("⚰️  %s a căzut în luptă...\n", nume);
-//        System.out.printf("📊 Nivel atins: %d\n", nivel);
-//        System.out.printf("💰 Gold acumulat: %d\n", gold);
-//        System.out.println();
-//    }
-
-    /**
-     * Afișează status complet (pentru compatibilitate)
-     */
-//    public void afiseazaStatusComplet() {
-//        System.out.println("\n╔═══════════════════════════════════════════╗");
-//        System.out.println("║         STATUS COMPLET EROU               ║");
-//        System.out.println("╚═══════════════════════════════════════════╝");
-//        System.out.println();
-//        System.out.printf("👤 Nume: %s\n", nume);
-//        System.out.printf("⭐ Nivel: %d\n", nivel);
-//        System.out.printf("📊 XP: %d / %d\n", xp, xpNecesarPentruUrmatoarelNivel);
-//        System.out.println();
-//        System.out.printf("❤️  HP: %d / %d\n", viata, viataMaxima);
-//        System.out.printf("💙 %s: %d / %d\n", tipResursa, resursaCurenta, resursaMaxima);
-//        System.out.println();
-//        System.out.printf("💪 Strength: %d\n", strength);
-//        System.out.printf("🎯 Dexterity: %d\n", dexterity);
-//        System.out.printf("🧠 Intelligence: %d\n", intelligence);
-//        System.out.printf("🛡️  Defense: %d\n", defense);
-//        System.out.println();
-//        System.out.printf("💰 Gold: %d\n", gold);
-//        System.out.printf("🔮 Shards: %d\n", shards);
-//        System.out.printf("⭐ Stat Points: %d\n", statPoints);
-//        System.out.println();
-//    }
 
 }

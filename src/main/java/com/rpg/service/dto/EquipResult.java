@@ -8,12 +8,12 @@ import com.rpg.model.items.ObiectEchipament;
 public class EquipResult {
     private final boolean success;
     private final String message;
-    private final ObiectEchipament previousItem; // Itemul deechipat anterior (dacă există)
+    private final ObiectEchipament replacedItem; // Itemul deechipat anterior (dacă există)
 
-    public EquipResult(boolean success, String message, ObiectEchipament previousItem) {
+    public EquipResult(boolean success, String message, ObiectEchipament replacedItem) {
         this.success = success;
         this.message = message;
-        this.previousItem = previousItem;
+        this.replacedItem = replacedItem;
     }
 
     public boolean isSuccess() {
@@ -25,10 +25,10 @@ public class EquipResult {
     }
 
     public ObiectEchipament getPreviousItem() {
-        return previousItem;
+        return replacedItem;
     }
 
     public boolean hasPreviousItem() {
-        return previousItem != null;
+        return replacedItem != null;
     }
 }

@@ -2,6 +2,7 @@ package com.rpg.controller;
 
 import com.rpg.model.characters.Erou;
 import com.rpg.model.characters.Inamic;
+import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.DungeonServiceFX;
 import com.rpg.service.EnemyGeneratorRomanesc;
 import com.rpg.service.SaveLoadServiceFX;
@@ -16,7 +17,9 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * TownMenuController - Versiune Finală cu toate serviciile FX
@@ -116,6 +119,14 @@ public class TownMenuController {
             stage.setScene(tavernController.createScene());
         });
 
+        // 🎮 CHARACTER SHEET
+        Button characterBtn = createMenuButton("🎮 Character Sheet", "#9b59b6");
+        characterBtn.setOnAction(e -> {
+            CharacterSheetController characterController = new CharacterSheetController(stage, hero);
+            stage.setScene(characterController.createScene());
+        });
+
+
         // 🎒 INVENTORY
         Button inventoryBtn = createMenuButton("🎒 Inventar", "#3498db");
         inventoryBtn.setOnAction(e -> {
@@ -141,8 +152,9 @@ public class TownMenuController {
         menu.getChildren().addAll(
                 menuTitle,
                 dungeonBtn, shopBtn, smithBtn, tavernBtn,
-                inventoryBtn, saveBtn, statsBtn, exitBtn
+                inventoryBtn, characterBtn, saveBtn, statsBtn, exitBtn  // ✅ Adaugă characterBtn
         );
+
         return menu;
     }
 
@@ -256,7 +268,7 @@ public class TownMenuController {
     private void showStatsDialog() {
         StringBuilder stats = new StringBuilder();
         stats.append("═══════════════════════════════\n");
-        stats.append("    STATISTICI COMPLETE\n");
+        stats.append("   📊 STATISTICI COMPLETE\n");
         stats.append("═══════════════════════════════\n\n");
 
         stats.append("👤 Nume: ").append(hero.getNume()).append("\n");
@@ -267,10 +279,52 @@ public class TownMenuController {
         stats.append("💙 ").append(hero.getTipResursa()).append(": ")
                 .append(hero.getResursaCurenta()).append("/").append(hero.getResursaMaxima()).append("\n\n");
 
-        stats.append("💪 Strength: ").append(hero.getStrength()).append("\n");
-        stats.append("🎯 Dexterity: ").append(hero.getDexterity()).append("\n");
-        stats.append("🧠 Intelligence: ").append(hero.getIntelligence()).append("\n\n");
+        // ✅ WOW STYLE - Base + Equipment = Total
+        stats.append("🔥 STATISTICI PRINCIPALE:\n");
+        stats.append(String.format("💪 Strength: %d + %d = %d\n",
+                hero.getStrength(),
+                hero.getStrengthTotal() - hero.getStrength(),
+                hero.getStrengthTotal()));
 
+        stats.append(String.format("🎯 Dexterity: %d + %d = %d\n",
+                hero.getDexterity(),
+                hero.getDexterityTotal() - hero.getDexterity(),
+                hero.getDexterityTotal()));
+
+        stats.append(String.format("🧠 Intelligence: %d + %d = %d\n",
+                hero.getIntelligence(),
+                hero.getIntelligenceTotal() - hero.getIntelligence(),
+                hero.getIntelligenceTotal()));
+
+        stats.append(String.format("🛡️ Defense: %d + %d = %d\n",
+                hero.getDefense(),
+                hero.getDefenseTotal() - hero.getDefense(),
+                hero.getDefenseTotal()));
+
+        // ✅ BONUSURI AVANSATE din echipament
+        stats.append("\n✨ BONUSURI SPECIALE:\n");
+        Map<String, Integer> allBonuses = getHeroAllBonuses(hero);
+
+        if (allBonuses.isEmpty()) {
+            stats.append("   • Niciun bonus special activ\n");
+        } else {
+            allBonuses.forEach((stat, bonus) -> {
+                if (!stat.equals("strength") && !stat.equals("dexterity") &&
+                        !stat.equals("intelligence") && !stat.equals("defense")) {
+                    String icon = getStatIcon(stat);
+                    String name = formatStatName(stat);
+                    stats.append(String.format("   %s +%d %s\n", icon, bonus, name));
+                }
+            });
+        }
+
+        // ✅ ȘANSE DE COMBAT
+        stats.append("\n⚔️ COMBAT STATS:\n");
+        stats.append(String.format("🎯 Hit Chance: %.1f%%\n", hero.getHitChance()));
+        stats.append(String.format("💥 Critical Chance: %.1f%%\n", hero.getCritChanceTotal()));
+        stats.append(String.format("💨 Dodge Chance: %.1f%%\n", hero.getDodgeChanceTotal()));
+
+        stats.append("\n💰 RESURSE:\n");
         stats.append("💰 Gold: ").append(hero.getGold()).append("\n");
         stats.append("🔮 Shards: ").append(hero.getShards()).append("\n");
 
@@ -280,6 +334,86 @@ public class TownMenuController {
 
         DialogHelper.showInfo("Statistici Complete", stats.toString());
     }
+
+    /**
+     * ✨ Helper pentru toate bonusurile active ale eroului
+     */
+    private Map<String, Integer> getHeroAllBonuses(Erou hero) {
+        Map<String, Integer> allBonuses = new HashMap<>();
+
+        // Bonusuri din echipament
+        Map<String, ObiectEchipament> echipat = hero.getEchipat();
+        for (ObiectEchipament item : echipat.values()) {
+            if (item != null) {
+                Map<String, Integer> itemBonuses = item.getTotalBonuses();
+                itemBonuses.forEach((stat, bonus) ->
+                        allBonuses.merge(stat, bonus, Integer::sum)
+                );
+            }
+        }
+
+        return allBonuses;
+    }
+
+    /**
+     * 🎨 Iconițe pentru statistici
+     */
+    private String getStatIcon(String stat) {
+        return switch (stat.toLowerCase()) {
+            case "damage" -> "⚔️";
+            case "defense" -> "🛡️";
+            case "health" -> "❤️";
+            case "strength" -> "💪";
+            case "dexterity" -> "🎯";
+            case "intelligence" -> "🧠";
+            case "crit_chance" -> "💥";
+            case "hit_chance" -> "🎯";
+            case "dodge_chance" -> "💨";
+            case "damage_reduction" -> "🛡️";
+            case "gold_find" -> "💰";
+            case "lifesteal" -> "🩸";
+            case "mana_steal" -> "💙";
+            case "elemental_damage" -> "🌈";
+            case "fire_resistance" -> "🔥";
+            case "ice_resistance" -> "❄️";
+            case "damage_bonus" -> "⚔️";
+            case "attack_bonus" -> "⚔️";
+            case "viata" -> "❤️";
+            case "mana" -> "💙";
+            case "block_chance" -> "🛡️";
+            default -> "✨";
+        };
+    }
+
+    /**
+     * 🏷️ Nume formatate pentru statistici
+     */
+    private String formatStatName(String stat) {
+        return switch (stat.toLowerCase()) {
+            case "damage" -> "Damage";
+            case "defense" -> "Defense";
+            case "health", "viata" -> "Health";
+            case "strength" -> "Strength";
+            case "dexterity" -> "Dexterity";
+            case "intelligence" -> "Intelligence";
+            case "crit_chance" -> "Critical Chance %";
+            case "hit_chance" -> "Hit Chance %";
+            case "dodge_chance" -> "Dodge Chance %";
+            case "damage_reduction" -> "Damage Reduction %";
+            case "gold_find" -> "Gold Find %";
+            case "lifesteal" -> "Lifesteal %";
+            case "mana_steal" -> "Mana Steal %";
+            case "elemental_damage" -> "Elemental Damage";
+            case "fire_resistance" -> "Fire Resistance %";
+            case "ice_resistance" -> "Ice Resistance %";
+            case "damage_bonus" -> "Damage Bonus";
+            case "attack_bonus" -> "Attack Bonus";
+            case "mana" -> "Mana";
+            case "block_chance" -> "Block Chance %";
+            default -> stat;
+        };
+    }
+
 
     private void handleExit() {
         if (DialogHelper.showConfirmation("Confirmare Ieșire",

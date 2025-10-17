@@ -300,6 +300,9 @@ public class ShopController {
     /**
      * Gestionează achiziția
      */
+    /**
+     * ✨ ÎMBUNĂTĂȚIT: Gestionează achiziția cu feedback extins
+     */
     private void handlePurchase() {
         ShopItemDTO selectedItem = itemListView.getSelectionModel().getSelectedItem();
         if (selectedItem == null) return;
@@ -307,27 +310,51 @@ public class ShopController {
         int quantity = quantitySpinner.getValue();
         int totalCost = selectedItem.getPrice() * quantity;
 
-        // Confirmare
-        String confirmMsg = String.format(
-                "Vrei să cumperi %dx %s pentru %d gold?",
-                quantity, selectedItem.getName(), totalCost
-        );
+        // Confirmare îmbunătățită
+        StringBuilder confirmMsg = new StringBuilder();
+        confirmMsg.append("🛍️ CONFIRMARE ACHIZIȚIE\n\n");
+        confirmMsg.append("📦 Produs: ").append(selectedItem.getName()).append("\n");
+        confirmMsg.append("🔢 Cantitate: ").append(quantity).append("x\n");
+        confirmMsg.append("💰 Cost Total: ").append(totalCost).append(" gold\n");
+        confirmMsg.append("💳 Gold rămas: ").append(hero.getGold() - totalCost).append(" gold\n\n");
+        confirmMsg.append("Continui cu achiziția?");
 
-        if (!DialogHelper.showConfirmation("Confirmare Achiziție", confirmMsg)) {
+        if (!DialogHelper.showConfirmation("Confirmare Achiziție", confirmMsg.toString())) {
             return;
         }
+
+        // 🔧 DEBUG: Log achiziția
+        System.out.printf("🛍️ PURCHASING: %s x%d for %d gold\n",
+                selectedItem.getName(), quantity, totalCost);
+        System.out.printf("💰 Gold before: %d\n", hero.getGold());
 
         // Execută achiziția
         PurchaseResult result = shopService.purchaseItem(hero, selectedItem, quantity);
 
+        // 🔧 DEBUG: Log rezultatul
+        System.out.printf("✅ Purchase result: %s - %s\n", result.isSuccess(), result.getMessage());
+        System.out.printf("💰 Gold after: %d\n", hero.getGold());
+
         if (result.isSuccess()) {
-            DialogHelper.showSuccess("Achiziție Reușită", result.getMessage());
+            // Succes îmbunătățit cu detalii
+            StringBuilder successMsg = new StringBuilder();
+            successMsg.append("✅ ACHIZIȚIE REUȘITĂ!\n\n");
+            successMsg.append("📦 ").append(result.getMessage()).append("\n");
+            successMsg.append("💰 Cost: ").append(result.getGoldSpent()).append(" gold\n");
+            successMsg.append("💳 Gold rămas: ").append(hero.getGold()).append(" gold\n\n");
+
+            if (selectedItem.getId().startsWith("weapon_") || selectedItem.getId().startsWith("armor_")) {
+                successMsg.append("🎒 Verifică inventarul pentru noul echipament!");
+            }
+
+            DialogHelper.showSuccess("Achiziție Reușită", successMsg.toString());
 
             // Update UI
             goldLabel.setText("💰 Gold: " + hero.getGold());
-            displayItemDetails(selectedItem); // Reafișează detaliile cu gold-ul actualizat
+            displayItemDetails(selectedItem);
         } else {
             DialogHelper.showError("Achiziție Eșuată", result.getMessage());
         }
     }
+
 }

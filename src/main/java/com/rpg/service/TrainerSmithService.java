@@ -1035,7 +1035,7 @@ public class TrainerSmithService {
      */
     private void enchantWeapons(Erou erou, Scanner scanner) {
         List<ObiectEchipament> weapons = erou.getInventar().stream()
-                .filter(item -> item.getTip() == ObiectEchipament.TipEchipament.WEAPON)
+                .filter(ObiectEchipament::isWeapon)  // ✅ Folosește helper method
                 .toList();
 
         if (weapons.isEmpty()) {

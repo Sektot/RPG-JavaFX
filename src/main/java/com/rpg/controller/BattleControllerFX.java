@@ -7,6 +7,7 @@ import com.rpg.service.EnemyGeneratorRomanesc;
 import com.rpg.service.dto.AbilityDTO;
 import com.rpg.service.dto.BattleInitDTO;
 import com.rpg.utils.DialogHelper;
+import com.rpg.utils.GameConstants;
 import javafx.animation.FadeTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -456,40 +457,45 @@ public class BattleControllerFX {
         // 🔄 MIGRARE AUTOMATĂ (păstrează din fix-ul anterior)
         if (hero.getInventar().getHealthPotions().isEmpty() && hero.getHealthPotions() > 0) {
             hero.getInventar().getHealthPotions().put(healAmount, hero.getHealthPotions());
-            System.out.printf("🔄 AUTO-MIGRATED: %d poțiuni HP → Map\\n", hero.getHealthPotions());
+            System.out.printf("🔄 AUTO-MIGRATED: %d poțiuni HP → Map\n", hero.getHealthPotions());
         }
 
-        // 🆕 DIALOG PENTRU ALEGEREA TIPULUI DE POȚIUNE
-        if (hero.getHealthPotions() > 0 && hero.getManaPotions() > 0) {
-            // Dacă ai și HP și resource potions, întreabă care vrea
-            boolean useHealthPotion = DialogHelper.showConfirmation(
-                    "Alegere Poțiune",
-                    "Ce poțiune vrei să folosești?\\n\\n" +
-                            "🧪 HP: Berice (+" + hero.getHealthPotionHealing() + " HP) x" + hero.getHealthPotions() + "\\n" +
-                            "💙 " + hero.getTipResursa() + ": Energizant (+" + hero.getManaPotionRestore() + ") x" + hero.getManaPotions() + "\\n\\n" +
-                            "✅ OK = HP Potion\\n" +
-                            "❌ Cancel = " + hero.getTipResursa() + " Potion"
-            );
+        // ✅ ELIMINAT DIALOGUL REDUNDANT - folosește direct health potion
+        // Nu mai întreba ce tip de poțiune vrea, pentru că utilizatorul a apăsat deja pe butonul specific
 
-            if (!useHealthPotion) {
-                // Folosește resource potion în schimb
-                handleResourcePotionUse(hero.getManaPotionRestore());
-                return; // Exit early pentru a nu executa codul de health potion
-            }
-        } else if (hero.getHealthPotions() <= 0 && hero.getManaPotions() > 0) {
-            // Dacă ai doar mana potions, folosește direct
-            handleResourcePotionUse(hero.getManaPotionRestore());
-            return;
-        }
-
-        // ✅ RESTUL CODULUI EXISTENT pentru health potions (NU schimba!)
         disableAllButtons();
 
         AbilityDTO.BattleTurnResultDTO result = battleService.usePotion(hero, enemy, healAmount);
 
-        addToLog(result.getLog()); // ✅ Folosește getLog() ca în original
+        addToLog(result.getLog());
 
-        if (result.isBattleOver()) { // ✅ Folosește isBattleOver() ca în original
+        if (result.isBattleOver()) {
+            // Verifică dacă ai șaorme pentru revival
+            if (hero.areShaormaRevival()) {
+                boolean useRevival = DialogHelper.showConfirmation(
+                        "💀 AI MURIT! 💀",
+                        "Vrei să folosești o Șaorma de Revival?\n" +
+                                "🌯 Șaorme disponibile: " + hero.getShaormaRevival() + "\n\n" +
+                                "✅ Da = Reînvie cu 50% HP/Resources\n" +
+                                "❌ Nu = Game Over"
+                );
+
+                if (useRevival && hero.folosesteShaormaRevival()) {
+                    addToLog("🌯✨ ȘAORMA DE REVIVAL ACTIVATĂ! ✨🌯");
+                    addToLog("💚 Te-ai reîntors din tărâmul umbrelor!");
+
+                    // Update UI după revival
+                    updateUI(new AbilityDTO.BattleStateDTO(
+                            hero.getViata(), hero.getViataMaxima(),
+                            hero.getResursaCurenta(), hero.getResursaMaxima(),
+                            enemy.getViata(), enemy.getViataMaxima(),
+                            new ArrayList<>()
+                    ));
+                    enableAllButtons();
+                    return;
+                }
+            }
+
             handleBattleEnd(result);
         } else {
             updateUI(result.getCurrentState());
@@ -712,14 +718,12 @@ public class BattleControllerFX {
     }
 
     private void updatePotionButtons() {
-        // 🔍 GĂSEȘTE CONTAINERUL CORECT - înlocuiește cu numele real
-        // Caută în createActionPanel() sau createUI() numele containerului pentru poțiuni
-        VBox potionsContainer = potionButtonsPanel; // SAU orice se numește containerul tău
+        VBox potionsContainer = potionButtonsPanel;
 
         if (potionsContainer != null) {
             potionsContainer.getChildren().clear();
 
-            // 🧪 AFIȘEAZĂ POȚIUNI SIMPLE (sistemul vechi)
+            // 🧪 HEALTH POTIONS
             int healthPotions = hero.getHealthPotions();
             if (healthPotions > 0) {
                 int healAmount = hero.getHealthPotionHealing();
@@ -728,24 +732,33 @@ public class BattleControllerFX {
                 potionBtn.setStyle("-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-weight: bold;");
                 potionBtn.setOnAction(e -> handlePotionUse(healAmount));
                 potionsContainer.getChildren().add(potionBtn);
-            } else {
-                Label noLabel = new Label("❌ Nu ai poțiuni");
-                noLabel.setStyle("-fx-text-fill: #e74c3c; -fx-font-style: italic;");
-                potionsContainer.getChildren().add(noLabel);
             }
 
-            // 🧪 AFIȘEAZĂ MANA POTIONS dacă există
+            // 🧪 MANA POTIONS - fix pentru sistemul simplu actual
             int manaPotions = hero.getManaPotions();
             if (manaPotions > 0) {
-                int restoreAmount = hero.getManaPotionRestore();
+                // ✅ FIX: Folosește valoarea fixă din GameConstants în loc de tier system
+               // int restoreAmount = 25; // sau orice valoare vrei tu
+                // SAU dacă ai acces la GameConstants:
+                 int restoreAmount = GameConstants.MANA_POTION_RESTORE;
 
-                Button manaBtn = new Button("💙 " + hero.getTipResursa() + " (" + restoreAmount + ") x" + manaPotions);
+                System.out.printf("SIMPLE MANA: restoreAmount=%d, manaPotions=%d\n", restoreAmount, manaPotions);
+
+                Button manaBtn = new Button("💙 " + hero.getTipResursa() + " (+" + restoreAmount + ") x" + manaPotions);
                 manaBtn.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold;");
                 manaBtn.setOnAction(e -> handleResourcePotionUse(restoreAmount));
                 potionsContainer.getChildren().add(manaBtn);
             }
+
+            // Dacă nu ai niciun tip de poțiune
+            if (healthPotions <= 0 && manaPotions <= 0) {
+                Label noLabel = new Label("❌ Nu ai poțiuni");
+                noLabel.setStyle("-fx-text-fill: #e74c3c; -fx-font-style: italic;");
+                potionsContainer.getChildren().add(noLabel);
+            }
         }
     }
+
 
     /**
      * Gestionează folosirea poțiunilor de resurse
@@ -812,13 +825,18 @@ public class BattleControllerFX {
     private void disableAllButtons() {
         attackButton.setDisable(true);
         fleeButton.setDisable(true);
-        abilityButtonsPanel.getChildren().forEach(node ->
-                ((Button)node).setDisable(true)
-        );
-        potionButtonsPanel.getChildren().forEach(node ->
-                ((Button)node).setDisable(true)
-        );
+        abilityButtonsPanel.getChildren().forEach(node -> {
+            if (node instanceof Button) {
+                ((Button)node).setDisable(true);
+            }
+        });
+        potionButtonsPanel.getChildren().forEach(node -> {
+            if (node instanceof Button) {
+                ((Button)node).setDisable(true);
+            }
+        });
     }
+
 
     private void enableAllButtons() {
         attackButton.setDisable(false);

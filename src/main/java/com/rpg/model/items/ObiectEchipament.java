@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.rpg.model.items.ObiectEchipament.TipEchipament.WEAPON;
+//import static com.rpg.model.items.ObiectEchipament.TipEchipament.WEAPON;
 
 /**
  * Reprezintă un obiect de echipament.
@@ -12,6 +12,88 @@ import static com.rpg.model.items.ObiectEchipament.TipEchipament.WEAPON;
  */
 public class ObiectEchipament implements Serializable {
     private static final long serialVersionUID = 1L;
+
+    // ✅ NOUT: Proprietăți pentru noul sistem
+    private WeaponHandedness handedness = WeaponHandedness.ONE_HANDED;
+    private boolean isOffHandCompatible = false;
+    private String weaponClass = ""; // "sword", "dagger", "staff", "wand", "orb", etc.
+
+
+    // ==================== ENUM PENTRU WEAPON HANDEDNESS ====================
+    public enum WeaponHandedness {
+        ONE_HANDED("One-Handed"),
+        TWO_HANDED("Two-Handed"),
+        OFF_HAND_ONLY("Off-Hand Only");
+
+        private final String displayName;
+
+        WeaponHandedness(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getDisplayName() { return displayName; }
+    }
+
+    // ==================== GETTERS/SETTERS NOI ====================
+
+    public WeaponHandedness getHandedness() { return handedness; }
+    public void setHandedness(WeaponHandedness handedness) { this.handedness = handedness; }
+
+    public boolean isOffHandCompatible() { return isOffHandCompatible; }
+    public void setOffHandCompatible(boolean offHandCompatible) { this.isOffHandCompatible = offHandCompatible; }
+
+    public String getWeaponClass() { return weaponClass; }
+    public void setWeaponClass(String weaponClass) { this.weaponClass = weaponClass; }
+
+    // ==================== HELPER METHODS ====================
+
+    /**
+     * Verifică dacă acest item poate fi echipat în main hand
+     */
+    public boolean canEquipInMainHand() {
+        return tip == TipEchipament.WEAPON_ONE_HANDED ||
+                tip == TipEchipament.WEAPON_TWO_HANDED;
+    }
+
+    /**
+     * Verifică dacă acest item poate fi echipat în off hand
+     */
+    public boolean canEquipInOffHand() {
+        return tip == TipEchipament.SHIELD ||
+                tip == TipEchipament.OFF_HAND_WEAPON ||
+                tip == TipEchipament.OFF_HAND_MAGIC ||
+                (tip == TipEchipament.WEAPON_ONE_HANDED && isOffHandCompatible);
+    }
+
+    /**
+     * Verifică dacă acest item ocupă ambele mâini
+     */
+    public boolean isTwoHanded() {
+        return tip == TipEchipament.WEAPON_TWO_HANDED ||
+                handedness == WeaponHandedness.TWO_HANDED;
+    }
+
+    /**
+     * Returnează slot-urile pe care le ocupă acest item
+     */
+    public java.util.Set<String> getOccupiedSlots() {
+        java.util.Set<String> slots = new java.util.HashSet<>();
+
+        if (isTwoHanded()) {
+            slots.add("MAIN_HAND");
+            slots.add("OFF_HAND");
+        } else if (canEquipInMainHand()) {
+            slots.add("MAIN_HAND");
+        } else if (canEquipInOffHand()) {
+            slots.add("OFF_HAND");
+        }
+
+        return slots;
+    }
+
+    // ==================== ACTUALIZARE CONSTRUCTOR ====================
+
+
 
     // ================== ENUM-URI NECESARE ==================
 
@@ -51,16 +133,22 @@ public class ObiectEchipament implements Serializable {
      * Enum pentru tipurile de echipament.
      */
     public enum TipEchipament {
-        WEAPON("Weapon", "⚔️"),
+        // ==================== ARME PRINCIPALE ====================
+        WEAPON_ONE_HANDED("One-Handed Weapon", "⚔️"),
+        WEAPON_TWO_HANDED("Two-Handed Weapon", "🗡️"),
+
+        // ==================== OFF-HAND ITEMS ====================
+        SHIELD("Shield", "🛡️"),
+        OFF_HAND_WEAPON("Off-Hand Weapon", "🗡️"),  // Daggers, shortswords pentru rogues
+        OFF_HAND_MAGIC("Off-Hand Magic", "📖"),     // Orbs, tomes, grimoires pentru mages
+
+        // ==================== ARMURĂ ȘI ACCESORII ====================
         ARMOR("Armor", "🛡️"),
         HELMET("Helmet", "⛑️"),
         BOOTS("Boots", "🥾"),
         GLOVES("Gloves", "🧤"),
         RING("Ring", "💍"),
-        NECKLACE("Necklace", "📿"),
-        SHIELD("Shield", "🛡️");
-
-
+        NECKLACE("Necklace", "📿");
 
         private final String displayName;
         private final String icon;
@@ -120,6 +208,23 @@ public class ObiectEchipament implements Serializable {
         if (intelligenceBonus > 0) bonuses.put("intelligence", intelligenceBonus);
         if (defenseBonus > 0) bonuses.put("defense", defenseBonus);
     }
+
+    /**
+     * Constructor extins pentru noul sistem
+     */
+    public ObiectEchipament(String nume, int nivelNecesar, Raritate raritate, TipEchipament tip,
+                            int strengthBonus, int dexterityBonus, int intelligenceBonus,
+                            int defenseBonus, int pret, WeaponHandedness handedness,
+                            String weaponClass, boolean isOffHandCompatible) {
+        // Apelează constructorul existent
+        this(nume, nivelNecesar, raritate, tip, strengthBonus, dexterityBonus,
+                intelligenceBonus, defenseBonus, pret);
+
+        this.handedness = handedness;
+        this.weaponClass = weaponClass;
+        this.isOffHandCompatible = isOffHandCompatible;
+    }
+
 
 
     /**
@@ -278,14 +383,16 @@ public class ObiectEchipament implements Serializable {
     /**
      * Returnează bonusul de atac al weapon-ului (pentru arme).
      */
+    /**
+     * Returnează bonusul de atac al weapon-ului (pentru arme).
+     */
     public int getAttackBonus() {
-        if (tip != WEAPON) {
+        if (!isWeapon()) {  // ✅ Folosește helper method în loc de tip != WEAPON
             return 0; // Doar armele au attack bonus
         }
         return getTotalBonuses().getOrDefault("attack_bonus", 0) +
                 getTotalBonuses().getOrDefault("damage_bonus", 0);
     }
-
 
     /**
      * Verifică dacă weapon-ul are enchantment de un anumit tip.
@@ -411,11 +518,22 @@ public class ObiectEchipament implements Serializable {
 
     // ================== METODE OVERRIDE ==================
 
+    // ==================== ACTUALIZARE toString() ====================
+
     @Override
     public String toString() {
         String status = equipped ? " [ECHIPAT]" : "";
         String tipDisplay = tip != null ? tip.getIcon() + tip.getDisplayName() : "Unknown";
         String enhancement = enhancementLevel > 0 ? " (+" + enhancementLevel + ")" : "";
+
+        // Afișează handedness pentru arme
+        String handednessDisplay = "";
+        if (canEquipInMainHand() || canEquipInOffHand()) {
+            handednessDisplay = " [" + handedness.getDisplayName() + "]";
+        }
+
+        // Afișează weapon class dacă există
+        String classDisplay = !weaponClass.isEmpty() ? " (" + weaponClass + ")" : "";
 
         // Adaugă enchantment display
         StringBuilder enchantDisplay = new StringBuilder();
@@ -429,16 +547,17 @@ public class ObiectEchipament implements Serializable {
             enchantDisplay.append("]");
         }
 
-        return String.format("%s %s%s%s (Nivel %d, %s, Duritate: %d%%, %d gold)%s",
-                tipDisplay, nume, enhancement, enchantDisplay.toString(),
-                nivelNecesar, raritate, duritate, pret, status);
+        return String.format("%s %s%s%s%s%s (Nivel %d, %s, Duritate: %d%%, %d gold)%s",
+                tipDisplay, nume, enhancement, handednessDisplay, classDisplay,
+                enchantDisplay.toString(), nivelNecesar, raritate, duritate, pret, status);
     }
+
 
     /**
      * Aplică un enchantment pe weapon (folosit de useEnchantScroll din Erou).
      */
     public void applyEnchantment(String enchantType, int damage) {
-        if (tip != WEAPON) {
+        if (!isWeapon()) {  // ✅ Folosește helper method în loc de tip != WEAPON
             throw new IllegalArgumentException("Enchantments pot fi aplicate doar pe arme!");
         }
 
@@ -449,6 +568,7 @@ public class ObiectEchipament implements Serializable {
 
         // Nu modificăm numele aici - se va face în Erou.useEnchantScroll()
     }
+
 
     /**
      * Returnează icon-ul pentru un tip de enchantment.
@@ -466,6 +586,56 @@ public class ObiectEchipament implements Serializable {
             default -> "✨";
         };
     }
+
+    // ==================== HELPER METHODS PENTRU COMPATIBILITATE ====================
+
+    /**
+     * Verifică dacă acest obiect este o armă (orice tip)
+     */
+    public boolean isWeapon() {
+        return tip == TipEchipament.WEAPON_ONE_HANDED ||
+                tip == TipEchipament.WEAPON_TWO_HANDED;
+    }
+
+    /**
+     * Verifică dacă acest obiect este armură (orice tip de protecție)
+     */
+    public boolean isArmor() {
+        return tip == TipEchipament.ARMOR ||
+                tip == TipEchipament.HELMET ||
+                tip == TipEchipament.GLOVES ||
+                tip == TipEchipament.BOOTS;
+    }
+
+    /**
+     * Verifică dacă acest obiect este accesoriu
+     */
+    public boolean isAccessory() {
+        return tip == TipEchipament.RING ||
+                tip == TipEchipament.NECKLACE;
+    }
+
+    /**
+     * Verifică dacă acest obiect este off-hand item
+     */
+    public boolean isOffHandItem() {
+        return tip == TipEchipament.SHIELD ||
+                tip == TipEchipament.OFF_HAND_WEAPON ||
+                tip == TipEchipament.OFF_HAND_MAGIC;
+    }
+
+    /**
+     * Pentru compatibilitate cu codul vechi - returnează categoria generală
+     */
+    public String getGeneralCategory() {
+        if (isWeapon()) return "WEAPON";
+        if (isArmor()) return "ARMOR";
+        if (isAccessory()) return "ACCESSORY";
+        if (isOffHandItem()) return "OFF_HAND";
+        return tip.name();
+    }
+
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;

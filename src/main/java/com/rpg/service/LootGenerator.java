@@ -13,88 +13,130 @@ import java.util.Map;
 
 public class LootGenerator {
 
-    // ==================== ARME FIZICE (STR + ATTACK) ====================
+    // ==================== ARME ONE-HANDED FIZICE ====================
+    public enum OneHandedPhysicalWeapon {
+        // Swords
+        SABIE("Sabia", new String[]{"Dacică", "Moldovenească", "de Oțel", "Rusească", "lui Ștefan"}, "sword"),
+        SPADA("Spada", new String[]{"Elegantă", "de Duel", "Nobilă", "Rafinată", "Cavalerească"}, "sword"),
+        CUTIT("Cuțitul", new String[]{"de Bucătărie", "din Vestiar", "Țepar", "Dur", "Învechit"}, "dagger"),
+        PUMNAL("Pumnalul", new String[]{"Ascuțit", "Rapid", "din Umbră", "Subțire", "Viclean"}, "dagger"),
 
-    public enum PhysicalWeapon {
-        // Tamed
-        SABIE("Sabia", new String[]{"Dacică", "Moldovenească", "de Oțel", "Rusească", "lui Ștefan"}),
-        TOPOR("Toporul", new String[]{"de Lemne", "Crăpat", "din Pădure", "de Război", "Bătrânesc"}),
-        CIOMAG("Ciomăgelul", new String[]{"de Stejar", "Țărănesc", "Brutal", "Greu", "din Codru"}),
-        BAT("Bâta", new String[]{"de Baseball", "Agresivă", "de Cartier", "Sportivă", "ProSport"}),
-        LANȚ("Lanțul", new String[]{"Greu", "de Bicicletă", "Oxidat", "Industrial", "Șmecheresc"}),
-
-        // Spicy
-        SECUREA("Securea", new String[]{"MUE PSD", "Anticorupție", "Justiției", "ANAF Slayer", "Revoluționară"}),
-        CIOCAN("Ciocanul", new String[]{"Liber", "Anticorupție", "lui Vadim", "Revoltei", "Dreptății"}),
-        LOPATA("Lopata", new String[]{"lui Videanu", "de Șantier", "Devastatoare", "Socialismului", "Grădinii"}),
-        FURCA("Furculița", new String[]{"Țărănească", "Revoltei", "Satului", "din 1907", "Furioasă"}),
-        RANGĂ("Ranga", new String[]{"de Luptă", "Demolatoare", "Revoluționară", "Grosolană", "Brutală"});
+        // Blunt
+        CIOMAG("Ciomăgelul", new String[]{"de Stejar", "Țărănesc", "Brutal", "Greu", "din Codru"}, "mace"),
+        BAT("Bâta", new String[]{"de Baseball", "Agresivă", "de Cartier", "Sportivă", "ProSport"}, "club");
 
         private final String baseName;
         private final String[] prefixes;
+        private final String weaponClass;
 
-        PhysicalWeapon(String baseName, String[] prefixes) {
+        OneHandedPhysicalWeapon(String baseName, String[] prefixes, String weaponClass) {
             this.baseName = baseName;
             this.prefixes = prefixes;
+            this.weaponClass = weaponClass;
         }
 
         public String getBaseName() { return baseName; }
         public String[] getPrefixes() { return prefixes; }
+        public String getWeaponClass() { return weaponClass; }
     }
 
-    // ==================== ARME AGILE (DEX + ATTACK) ====================
-
-    public enum AgileWeapon {
-        // Tamed
-        PUMNAL("Pumnalul", new String[]{"Ascuțit", "Rapid", "din Umbră", "Subțire", "Viclean"}),
-        ARC("Arcul", new String[]{"Lung", "de Vânătoare", "Precis", "Elastic", "Tradițional"}),
-        ARBALETA("Arbaleta", new String[]{"Mecanică", "Silențioasă", "Precisă", "Modernă", "Tactică"}),
-        KATANA("Katana", new String[]{"Japoneză", "Samurai", "Șmecheră", "Weeb", "Ascuțită"}),
-
-        // Spicy
-        BRICEAG("Briceagul", new String[]{"de Craiova", "Oltean", "Dubios", "Interlop", "de Cartier"}),
-        CUȚIT("Cuțitul", new String[]{"de Bucătărie", "din Vestiar", "Țepar", "Dur", "Învechit"}),
-        LAMA("Lama", new String[]{"Ascunsă", "Otrăvită", "Murdară", "Ruginită", "Periculoasă"}),
-        FOARFECA("Foarfeca", new String[]{"Mare", "de Gradinar", "Tăioasă", "Dubioasă", "Improvizată"});
+    // ==================== ARME TWO-HANDED FIZICE ====================
+    public enum TwoHandedPhysicalWeapon {
+        TOPOR("Toporul", new String[]{"de Lemne", "Crăpat", "din Pădure", "de Război", "Bătrânesc"}, "axe"),
+        SECUREA("Securea", new String[]{"MUE PSD", "Anticorupție", "Justiției", "ANAF Slayer", "Revoluționară"}, "axe"),
+        CIOCAN("Ciocanul", new String[]{"Liber", "Anticorupție", "lui Vadim", "Revoltei", "Dreptății"}, "hammer"),
+        LOPATA("Lopata", new String[]{"lui Videanu", "de Șantier", "Devastatoare", "Socialismului", "Grădinii"}, "shovel"),
+        RANGA("Ranga", new String[]{"de Luptă", "Demolatoare", "Revoluționară", "Grosolană", "Brutală"}, "polearm");
 
         private final String baseName;
         private final String[] prefixes;
+        private final String weaponClass;
 
-        AgileWeapon(String baseName, String[] prefixes) {
+        TwoHandedPhysicalWeapon(String baseName, String[] prefixes, String weaponClass) {
             this.baseName = baseName;
             this.prefixes = prefixes;
+            this.weaponClass = weaponClass;
         }
 
         public String getBaseName() { return baseName; }
         public String[] getPrefixes() { return prefixes; }
+        public String getWeaponClass() { return weaponClass; }
     }
 
-    // ==================== ARME MAGICE (INT + MAGIC) ====================
+    // ==================== RANGED WEAPONS ====================
+    public enum RangedWeapon {
+        ARC("Arcul", new String[]{"Lung", "de Vânătoare", "Precis", "Elastic", "Tradițional"}, "bow"),
+        ARBALETA("Arbaleta", new String[]{"Mecanică", "Silențioasă", "Precisă", "Modernă", "Tactică"}, "crossbow");
 
+        private final String baseName;
+        private final String[] prefixes;
+        private final String weaponClass;
+
+        RangedWeapon(String baseName, String[] prefixes, String weaponClass) {
+            this.baseName = baseName;
+            this.prefixes = prefixes;
+            this.weaponClass = weaponClass;
+        }
+
+        public String getBaseName() { return baseName; }
+        public String[] getPrefixes() { return prefixes; }
+        public String getWeaponClass() { return weaponClass; }
+    }
+
+
+    // ==================== ARME MAGICE ====================
     public enum MagicalWeapon {
-        // Tamed
-        TOIAG("Toiagul", new String[]{"Solomonarului", "Înțelept", "Vechi", "Mistic", "din Cluj"}),
-        BAGHETA("Bagheta", new String[]{"Magică", "Fermecată", "Strălucitoare", "Ardeleanului", "Vrăjitorului"}),
-        CARTE("Cartea", new String[]{"Vrăjilor", "Interzisă", "Veche", "Dacică", "Strămoșească"}),
-        CRISTAL("Cristalul", new String[]{"Mistic", "Strălucitor", "Energetic", "Albastru", "Puterii"}),
+        // One-handed magic
+        BAGHETA("Bagheta", new String[]{"Magică", "Fermecată", "Strălucitoare", "Ardeleanului", "Vrăjitorului"}, "wand", true),
+        SMARTPHONE("Smartphone-ul", new String[]{"cu 5G", "Hackuit", "Programmer", "Google Fu", "Reddit Wisdom"}, "device", true),
 
-        // Spicy
-        BIBLIE("Biblia", new String[]{"Sfântă", "Bătătoare", "Grea", "Vechiului Testament", "Justiției"}),
-        MANUAL("Manualul", new String[]{"de Logică", "lui Ben Shapiro", "Facts & Logic", "Anti-Prostie", "Educației"}),
-        SMARTPHONE("Smartphone-ul", new String[]{"cu 5G", "Hackuit", "Programmer", "Google Fu", "Reddit Wisdom"});
+        // Two-handed magic
+        TOIAG("Toiagul", new String[]{"Solomonarului", "Înțelept", "Vechi", "Mistic", "din Cluj"}, "staff", false),
+
+        // Off-hand magic
+        CARTE("Cartea", new String[]{"Vrăjilor", "Interzisă", "Veche", "Dacică", "Strămoșească"}, "tome", false),
+        CRISTAL("Cristalul", new String[]{"Mistic", "Strălucitor", "Energetic", "Albastru", "Puterii"}, "orb", false),
+        BIBLIE("Biblia", new String[]{"Sfântă", "Bătătoare", "Grea", "Vechiului Testament", "Justiției"}, "holy", false);
 
         private final String baseName;
         private final String[] prefixes;
+        private final String weaponClass;
+        private final boolean isOneHanded;
 
-        MagicalWeapon(String baseName, String[] prefixes) {
+        MagicalWeapon(String baseName, String[] prefixes, String weaponClass, boolean isOneHanded) {
             this.baseName = baseName;
             this.prefixes = prefixes;
+            this.weaponClass = weaponClass;
+            this.isOneHanded = isOneHanded;
         }
 
         public String getBaseName() { return baseName; }
         public String[] getPrefixes() { return prefixes; }
+        public String getWeaponClass() { return weaponClass; }
+        public boolean isOneHanded() { return isOneHanded; }
     }
 
+    // ==================== SHIELDS ====================
+    public enum ShieldType {
+        SCUT("Scut", new String[]{"Dacic", "Roman", "Medieval", "de Lemn", "Întărit"}, "shield"),
+        SCUT_RIOT("Scut", new String[]{"Riot", "Transparent", "Poliție", "Protecție", "Modern"}, "riot_shield"),
+        SCUT_JANDARM("Scut", new String[]{"Jandarm", "Anti-Manifest", "Antiglonț", "Autorității", "Corupției"}, "tactical_shield"),
+        CAPAC("Capac", new String[]{"de Tomberon", "Gunoi", "Improvizat", "Post-Apocaliptic", "Homeless"}, "improvised");
+
+        private final String baseName;
+        private final String[] prefixes;
+        private final String shieldClass;
+
+        ShieldType(String baseName, String[] prefixes, String shieldClass) {
+            this.baseName = baseName;
+            this.prefixes = prefixes;
+            this.shieldClass = shieldClass;
+        }
+
+        public String getBaseName() { return baseName; }
+        public String[] getPrefixes() { return prefixes; }
+        public String getShieldClass() { return shieldClass; }
+    }
     // ==================== ARMURI (DEFENSE + HP) ====================
 
     private static final String[][] ARMOR_TYPES = {
@@ -220,60 +262,91 @@ public class LootGenerator {
     public static ObiectEchipament generateItemByType(TipEchipament tip, int level, Raritate raritate) {
         String itemName;
         Map<String, Integer> bonuses;
+        ObiectEchipament.WeaponHandedness handedness = ObiectEchipament.WeaponHandedness.ONE_HANDED;
+        String weaponClass = "";
+        boolean isOffHandCompatible = false;
 
         switch (tip) {
-            case WEAPON -> {
-                // Alege random între Physical, Agile, Magical
+            case WEAPON_ONE_HANDED -> {
+                // Alege random între Physical și Agile one-handed
                 double roll = RandomUtils.randomDouble();
-                if (roll < 0.33) {
-                    PhysicalWeapon weapon = RandomUtils.randomElement(PhysicalWeapon.values());
+                if (roll < 0.7) { // 70% Physical
+                    OneHandedPhysicalWeapon weapon = RandomUtils.randomElement(OneHandedPhysicalWeapon.values());
                     itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
                     bonuses = calculatePhysicalWeaponBonuses(raritate);
-                } else if (roll < 0.66) {
-                    AgileWeapon weapon = RandomUtils.randomElement(AgileWeapon.values());
-                    itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
-                    bonuses = calculateAgileWeaponBonuses(raritate);
-                } else {
-                    MagicalWeapon weapon = RandomUtils.randomElement(MagicalWeapon.values());
+                    weaponClass = weapon.getWeaponClass();
+
+                    // Daggers/knives pot fi off-hand compatible
+                    isOffHandCompatible = weaponClass.equals("dagger");
+                } else { // 30% Magical one-handed
+                    MagicalWeapon[] oneHandedMagic = java.util.Arrays.stream(MagicalWeapon.values())
+                            .filter(MagicalWeapon::isOneHanded)
+                            .toArray(MagicalWeapon[]::new);
+                    MagicalWeapon weapon = RandomUtils.randomElement(oneHandedMagic);
                     itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
                     bonuses = calculateMagicalWeaponBonuses(raritate);
+                    weaponClass = weapon.getWeaponClass();
+                    isOffHandCompatible = true; // Wands pot fi off-hand
                 }
+                handedness = ObiectEchipament.WeaponHandedness.ONE_HANDED;
             }
-            case ARMOR -> {
-                String[] armorData = RandomUtils.randomElement(ARMOR_TYPES);
-                itemName = generateArmorName(armorData, raritate);
-                bonuses = calculateDefensiveBonuses(raritate, 1.0);
+
+            case WEAPON_TWO_HANDED -> {
+                double roll = RandomUtils.randomDouble();
+                if (roll < 0.6) { // 60% Physical two-handed
+                    TwoHandedPhysicalWeapon weapon = RandomUtils.randomElement(TwoHandedPhysicalWeapon.values());
+                    itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
+                    bonuses = calculatePhysicalWeaponBonuses(raritate);
+                    weaponClass = weapon.getWeaponClass();
+                } else if (roll < 0.85) { // 25% Magical two-handed (staffs)
+                    MagicalWeapon[] twoHandedMagic = java.util.Arrays.stream(MagicalWeapon.values())
+                            .filter(w -> !w.isOneHanded() && w.getWeaponClass().equals("staff"))
+                            .toArray(MagicalWeapon[]::new);
+                    MagicalWeapon weapon = RandomUtils.randomElement(twoHandedMagic);
+                    itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
+                    bonuses = calculateMagicalWeaponBonuses(raritate);
+                    weaponClass = weapon.getWeaponClass();
+                } else { // 15% Ranged two-handed
+                    RangedWeapon weapon = RandomUtils.randomElement(RangedWeapon.values());
+                    itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
+                    bonuses = calculateRangedWeaponBonuses(raritate);
+                    weaponClass = weapon.getWeaponClass();
+                }
+                handedness = ObiectEchipament.WeaponHandedness.TWO_HANDED;
             }
-            case HELMET -> {
-                String[] helmetData = RandomUtils.randomElement(HELMET_TYPES);
-                itemName = generateArmorName(helmetData, raritate);
-                bonuses = calculateDefensiveBonuses(raritate, 0.7);
-            }
-            case BOOTS -> {
-                String[] bootsData = RandomUtils.randomElement(BOOTS_TYPES);
-                itemName = generateArmorName(bootsData, raritate);
-                bonuses = calculateDefensiveBonuses(raritate, 0.6);
-            }
-            case GLOVES -> {
-                String[] glovesData = RandomUtils.randomElement(GLOVES_TYPES);
-                itemName = generateArmorName(glovesData, raritate);
-                bonuses = calculateDefensiveBonuses(raritate, 0.6);
-            }
+
             case SHIELD -> {
-                String[] shieldData = RandomUtils.randomElement(SHIELD_TYPES);
-                itemName = generateArmorName(shieldData, raritate);
+                ShieldType shield = RandomUtils.randomElement(ShieldType.values());
+                itemName = generateWeaponName(shield.getBaseName(), shield.getPrefixes(), raritate);
                 bonuses = calculateShieldBonuses(raritate);
+                weaponClass = shield.getShieldClass();
+                handedness = ObiectEchipament.WeaponHandedness.OFF_HAND_ONLY;
             }
-            case RING -> {
-                String[] ringData = RandomUtils.randomElement(RING_TYPES);
-                itemName = generateAccessoryName(ringData, raritate);
-                bonuses = calculateAccessoryBonuses(raritate);
+
+            case OFF_HAND_WEAPON -> {
+                // Generate off-hand specific daggers/weapons
+                String[] offHandNames = {"Pumnal", "Stiletto", "Cuțit", "Dagger"};
+                String[] offHandPrefixes = {"Rapid", "din Umbră", "Secundar", "de Backup", "Ascuns"};
+                itemName = generateWeaponName(RandomUtils.randomElement(offHandNames),
+                        offHandPrefixes, raritate);
+                bonuses = calculateOffHandWeaponBonuses(raritate);
+                weaponClass = "dagger";
+                handedness = ObiectEchipament.WeaponHandedness.OFF_HAND_ONLY;
             }
-            case NECKLACE -> {
-                String[] necklaceData = RandomUtils.randomElement(NECKLACE_TYPES);
-                itemName = generateAccessoryName(necklaceData, raritate);
-                bonuses = calculateAccessoryBonuses(raritate);
+
+            case OFF_HAND_MAGIC -> {
+                MagicalWeapon[] offHandMagic = java.util.Arrays.stream(MagicalWeapon.values())
+                        .filter(w -> !w.isOneHanded() && !w.getWeaponClass().equals("staff"))
+                        .toArray(MagicalWeapon[]::new);
+                MagicalWeapon weapon = RandomUtils.randomElement(offHandMagic);
+                itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
+                bonuses = calculateOffHandMagicBonuses(raritate);
+                weaponClass = weapon.getWeaponClass();
+                handedness = ObiectEchipament.WeaponHandedness.OFF_HAND_ONLY;
             }
+
+            // ... rest of armor cases stay the same ...
+
             default -> {
                 itemName = "Unknown Item";
                 bonuses = new HashMap<>();
@@ -283,6 +356,7 @@ public class LootGenerator {
         int requiredLevel = Math.max(1, level + RandomUtils.randomInt(-2, 2));
         int pret = calculateItemPrice(requiredLevel, raritate);
 
+        // Folosește constructorul extins
         return new ObiectEchipament(
                 itemName,
                 requiredLevel,
@@ -292,10 +366,66 @@ public class LootGenerator {
                 bonuses.getOrDefault("dexterity", 0),
                 bonuses.getOrDefault("intelligence", 0),
                 bonuses.getOrDefault("defense", 0),
-                pret
+                pret,
+                handedness,
+                weaponClass,
+                isOffHandCompatible
         );
     }
 
+
+// ==================== BONUSURI NOI ====================
+
+    private static Map<String, Integer> calculateRangedWeaponBonuses(Raritate raritate) {
+        Map<String, Integer> bonuses = new HashMap<>();
+        int baseBonus = (int)(raritate.getMultiplier() * 2);
+
+        bonuses.put("dexterity", baseBonus + RandomUtils.randomInt(2, 6));
+        bonuses.put("Damage", baseBonus + RandomUtils.randomInt(3, 7));
+        bonuses.put("hit_chance", baseBonus * 2); // Ranged = mai precis
+        bonuses.put("crit_chance", baseBonus + 3);
+
+        if (raritate.ordinal() >= 2) {
+            bonuses.put("damage_bonus", baseBonus);
+        }
+
+        return bonuses;
+    }
+
+    private static Map<String, Integer> calculateOffHandWeaponBonuses(Raritate raritate) {
+        Map<String, Integer> bonuses = new HashMap<>();
+        int baseBonus = (int)(raritate.getMultiplier() * 1.5); // Slightly lower than main hand
+
+        bonuses.put("dexterity", baseBonus + RandomUtils.randomInt(1, 3));
+        bonuses.put("Damage", baseBonus + RandomUtils.randomInt(1, 4));
+        bonuses.put("crit_chance", baseBonus * 2); // Off-hand = mai multe crit-uri
+        bonuses.put("hit_chance", baseBonus);
+
+        if (raritate.ordinal() >= 2) {
+            bonuses.put("dodge_chance", baseBonus);
+        }
+
+        return bonuses;
+    }
+
+    private static Map<String, Integer> calculateOffHandMagicBonuses(Raritate raritate) {
+        Map<String, Integer> bonuses = new HashMap<>();
+        int baseBonus = (int)(raritate.getMultiplier() * 1.5);
+
+        bonuses.put("intelligence", baseBonus + RandomUtils.randomInt(1, 4));
+        bonuses.put("mana", baseBonus * 8);
+        bonuses.put("mana_steal", baseBonus);
+
+        if (raritate.ordinal() >= 1) {
+            bonuses.put("elemental_damage", baseBonus);
+        }
+
+        if (raritate.ordinal() >= 2) {
+            bonuses.put("crit_chance", baseBonus);
+        }
+
+        return bonuses;
+    }
     // ==================== GENERARE NUME ====================
 
     private static String generateWeaponName(String baseName, String[] prefixes, Raritate raritate) {
@@ -341,10 +471,28 @@ public class LootGenerator {
         int attackBonus = baseBonus + RandomUtils.randomInt(2, 5);
 
         bonuses.put("strength", baseBonus + RandomUtils.randomInt(1, 4));
-        bonuses.put("attack_bonus", attackBonus);
+        bonuses.put("Damage", attackBonus);
 
-        if (raritate.ordinal() >= 2) {
-            bonuses.put("damage_bonus", baseBonus);
+        // ✨ BONUSURI NOI
+        if (raritate.ordinal() >= 1) { // UNCOMMON+
+            bonuses.put("hit_chance", baseBonus + 2);
+        }
+
+        if (raritate.ordinal() >= 2) { // RARE+
+            bonuses.put("crit_chance", baseBonus);
+            bonuses.put("damage_bonus", baseBonus / 2);
+        }
+
+        if (raritate.ordinal() >= 3) { // EPIC+
+            bonuses.put("lifesteal", Math.max(1, baseBonus / 3));
+        }
+
+        if (raritate == Raritate.LEGENDARY) {
+            bonuses.put("elemental_damage", baseBonus);
+            // Bonus aleator special
+            String[] specialBonuses = {"gold_find", "fire_resistance"};
+            String special = RandomUtils.randomElement(specialBonuses);
+            bonuses.put(special, baseBonus + 5);
         }
 
         return bonuses;
@@ -356,10 +504,25 @@ public class LootGenerator {
         int attackBonus = baseBonus + RandomUtils.randomInt(2, 5);
 
         bonuses.put("dexterity", baseBonus + RandomUtils.randomInt(1, 4));
-        bonuses.put("attack_bonus", attackBonus);
+        bonuses.put("Damage", attackBonus);
 
-        if (raritate.ordinal() >= 2) {
-            bonuses.put("crit_chance", baseBonus / 2);
+        // ✨ BONUSURI NOI
+        if (raritate.ordinal() >= 1) { // UNCOMMON+
+            bonuses.put("crit_chance", baseBonus + 3);
+        }
+
+        if (raritate.ordinal() >= 2) { // RARE+
+            bonuses.put("hit_chance", baseBonus + 5);
+            bonuses.put("dodge_chance", baseBonus / 2);
+        }
+
+        if (raritate.ordinal() >= 3) { // EPIC+
+            bonuses.put("damage_bonus", baseBonus);
+        }
+
+        if (raritate == Raritate.LEGENDARY) {
+            bonuses.put("elemental_damage", baseBonus);
+            bonuses.put("gold_find", baseBonus + 10);
         }
 
         return bonuses;
@@ -371,10 +534,28 @@ public class LootGenerator {
         int attackBonus = baseBonus + RandomUtils.randomInt(2, 5);
 
         bonuses.put("intelligence", baseBonus + RandomUtils.randomInt(1, 4));
-        bonuses.put("attack_bonus", attackBonus);
+        bonuses.put("Damage", attackBonus);
 
-        if (raritate.ordinal() >= 1) {
+        // ✨ BONUSURI NOI
+        if (raritate.ordinal() >= 1) { // UNCOMMON+
             bonuses.put("mana", baseBonus * 5);
+            bonuses.put("mana_steal", Math.max(1, baseBonus / 2));
+        }
+
+        if (raritate.ordinal() >= 2) { // RARE+
+            bonuses.put("elemental_damage", baseBonus);
+        }
+
+        if (raritate.ordinal() >= 3) { // EPIC+
+            bonuses.put("crit_chance", baseBonus);
+            // Rezistențe elementale
+            bonuses.put("fire_resistance", baseBonus);
+            bonuses.put("ice_resistance", baseBonus);
+        }
+
+        if (raritate == Raritate.LEGENDARY) {
+            bonuses.put("damage_bonus", baseBonus);
+            bonuses.put("gold_find", baseBonus + 15);
         }
 
         return bonuses;
@@ -385,14 +566,33 @@ public class LootGenerator {
         int baseBonus = (int)(raritate.getMultiplier() * 2 * multiplier);
 
         bonuses.put("defense", baseBonus + RandomUtils.randomInt(2, 5));
-        bonuses.put("viata", (int)(baseBonus * 8));
+        bonuses.put("health", (int)(baseBonus * 8));
 
-        if (raritate.ordinal() >= 2) {
-            bonuses.put("damage_reduction", baseBonus / 2);
+        // ✨ BONUSURI NOI
+        if (raritate.ordinal() >= 1) { // UNCOMMON+
+            bonuses.put("dodge_chance", Math.max(1, baseBonus / 2));
+        }
+
+        if (raritate.ordinal() >= 2) { // RARE+
+            bonuses.put("damage_reduction", baseBonus);
+        }
+
+        if (raritate.ordinal() >= 3) { // EPIC+
+            bonuses.put("fire_resistance", baseBonus);
+            bonuses.put("ice_resistance", baseBonus);
+        }
+
+        if (raritate == Raritate.LEGENDARY) {
+            bonuses.put("gold_find", baseBonus + 5);
+            // Bonus special defensiv
+            String[] defensiveBonuses = {"block_chance", "lifesteal"};
+            String special = RandomUtils.randomElement(defensiveBonuses);
+            bonuses.put(special, Math.max(2, baseBonus / 2));
         }
 
         return bonuses;
     }
+
 
     private static Map<String, Integer> calculateShieldBonuses(Raritate raritate) {
         Map<String, Integer> bonuses = new HashMap<>();

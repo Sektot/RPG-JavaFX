@@ -132,7 +132,7 @@ public class InventoryServiceFX {
      */
     private List<InventoryItemDTO> getWeapons(Erou erou) {
         return erou.getInventar().getItems().stream()
-                .filter(item -> item.getTip() == ObiectEchipament.TipEchipament.WEAPON)  // ✅ WEAPON
+                .filter(item -> item.isWeapon())  // ✅ Folosește helper method
                 .map(item -> createEquipmentDTO(item, false))
                 .collect(Collectors.toList());
     }
@@ -232,19 +232,18 @@ public class InventoryServiceFX {
     public EquipResult equipItem(Erou erou, ObiectEchipament item) {
         ObiectEchipament previousItem = null;
 
-        switch (item.getTip()) {
-            case WEAPON -> {  // ✅ WEAPON în loc de ARMA
-                previousItem = erou.getArmaEchipata();
-                erou.echipeazaArma(item);
-            }
-            case ARMOR -> {  // ✅ ARMOR în loc de ARMURA
-                previousItem = erou.getArmuraEchipata();
-                erou.echipeazaArmura(item);
-            }
-            case RING, NECKLACE, HELMET, BOOTS, GLOVES, SHIELD -> {  // ✅ Accesorii multiple
-                previousItem = erou.getAccesoriuEchipat();
-                erou.echipeazaAccesoriu(item);
-            }
+// ÎN LOC DE switch cu WEAPON, folosește if-else:
+        if (item.isWeapon()) {
+            previousItem = erou.getArmaEchipata();
+            erou.echipeazaArma(item);
+        } else if (item.getTip() == ObiectEchipament.TipEchipament.ARMOR) {
+            previousItem = erou.getArmuraEchipata();
+            erou.echipeazaArmura(item);
+        } else if (item.isAccessory() || item.getTip() == ObiectEchipament.TipEchipament.HELMET ||
+                item.getTip() == ObiectEchipament.TipEchipament.GLOVES ||
+                item.getTip() == ObiectEchipament.TipEchipament.BOOTS) {
+            previousItem = erou.getAccesoriuEchipat();
+            erou.echipeazaAccesoriu(item);
         }
 
         return new EquipResult(true, "Ai echipat: " + item.getNume(), previousItem);
@@ -256,27 +255,25 @@ public class InventoryServiceFX {
     public EquipResult unequipItem(Erou erou, ObiectEchipament item) {
         boolean success = false;
 
-        switch (item.getTip()) {
-            case WEAPON -> {  // ✅ WEAPON
-                if (erou.getArmaEchipata() == item) {
-                    erou.deechipeazaArma();
-                    success = true;
-                }
+// ÎN LOC DE switch cu WEAPON:
+        if (item.isWeapon()) {
+            if (erou.getArmaEchipata() == item) {
+                erou.deechipeazaArma();
+                success = true;
             }
-            case ARMOR -> {  // ✅ ARMOR
-                if (erou.getArmuraEchipata() == item) {
-                    erou.deechipeazaArmura();
-                    success = true;
-                }
+        } else if (item.getTip() == ObiectEchipament.TipEchipament.ARMOR) {
+            if (erou.getArmuraEchipata() == item) {
+                erou.deechipeazaArmura();
+                success = true;
             }
-            case RING, NECKLACE, HELMET, BOOTS, GLOVES, SHIELD -> {  // ✅ Accesorii
-                if (erou.getAccesoriuEchipat() == item) {
-                    erou.deechipeazaAccesoriu();
-                    success = true;
-                }
+        } else if (item.isAccessory() || item.getTip() == ObiectEchipament.TipEchipament.HELMET ||
+                item.getTip() == ObiectEchipament.TipEchipament.GLOVES ||
+                item.getTip() == ObiectEchipament.TipEchipament.BOOTS) {
+            if (erou.getAccesoriuEchipat() == item) {
+                erou.deechipeazaAccesoriu();
+                success = true;
             }
         }
-
         if (success) {
             return new EquipResult(true, "Ai deechipat: " + item.getNume(), item);
         }
@@ -344,40 +341,227 @@ public class InventoryServiceFX {
     // ==================== CREATE DTO HELPERS ====================
 
     /**
-     * CreateEquipmentDTO - ÎNLOCUIEȘTE METODA COMPLETĂ
+     * ✨ DESCRIERI BOGATE integrate cu logica din ObiectEchipament
      */
     private InventoryItemDTO createEquipmentDTO(ObiectEchipament item, boolean equipped) {
-        String icon = switch (item.getTip()) {
-            case WEAPON -> "⚔️";     // ✅ WEAPON
-            case ARMOR -> "🛡️";      // ✅ ARMOR
-            case HELMET -> "⛑️";
-            case BOOTS -> "🥾";
-            case GLOVES -> "🧤";
-            case RING -> "💍";
-            case NECKLACE -> "📿";
-            case SHIELD -> "🛡️";
+        String icon = item.getTip().getIcon(); // Folosește iconul din enum
+
+        // 🎨 RARITATE cu iconițe colorate
+        String rarityIcon = switch (item.getRaritate()) {
+            case COMMON -> "⚪";
+            case UNCOMMON -> "🟢";
+            case RARE -> "🔵";
+            case EPIC -> "🟣";
+            case LEGENDARY -> "🟠";
         };
 
-        StringBuilder description = new StringBuilder();
-        description.append("Raritate: ").append(item.getRaritate()).append("\n");
-        description.append("Nivel: ").append(item.getNivelNecesar()).append("\n");
-        description.append("Enhancement: +").append(item.getEnhancementLevel()).append("\n");
-        description.append("Preț: ").append(item.getPret()).append(" gold\n\n");
-        description.append("Bonusuri:\n");
+        // 🏷️ NUME COMPLET cu status
+        StringBuilder displayName = new StringBuilder();
+        displayName.append(icon).append(" ");
+        displayName.append(item.getNume()); // Numele din model (cu +X automat)
+        displayName.append(" ").append(rarityIcon);
 
-        item.getTotalBonuses().forEach((stat, bonus) ->
-                description.append("  • +").append(bonus).append(" ").append(stat).append("\n")
-        );
+        if (equipped) {
+            displayName.insert(0, "✅ ").append(" [ECHIPAT]");
+        }
+
+        // 📝 DESCRIERE BOGATĂ folosind datele din model
+        StringBuilder description = new StringBuilder();
+        description.append("═══════════════════════════════\n");
+        description.append("🏷️  ").append(item.getNume()).append("\n");
+        description.append("═══════════════════════════════\n\n");
+
+        // 📊 INFORMAȚII DE BAZĂ din model
+        description.append("🎯 Raritate: ").append(item.getRaritate().getDisplayName())
+                .append(" ").append(rarityIcon).append("\n");
+        description.append("📊 Nivel Necesar: ").append(item.getNivelNecesar()).append("\n");
+
+        // ⚡ ENHANCEMENT din model (gestionat automat)
+        if (item.getEnhancementLevel() > 0) {
+            description.append("⚡ Enhancement: +").append(item.getEnhancementLevel())
+                    .append(" (").append(item.canBeEnhanced() ? "poate fi îmbunătățit" : "nivel maxim")
+                    .append(")\n");
+
+            if (item.canBeEnhanced()) {
+                description.append("💰 Cost următorul nivel: ")
+                        .append(item.getNextEnhancementCost()).append(" gold\n");
+            }
+        } else {
+            description.append("⚡ Enhancement: Niciunul (poate fi îmbunătățit)\n");
+        }
+
+        description.append("💰 Valoare: ").append(item.getPret()).append(" gold\n");
+        description.append("🛠️  Duritate: ").append(item.getDuritate()).append("%\n");
+
+        if (equipped) {
+            description.append("✅ Status: ECHIPAT ACTIV\n");
+        } else {
+            description.append("📦 Status: În inventar\n");
+        }
+
+        // 🔥 BONUSURI TOTALE din model (include enhancement automat)
+        description.append("\n🔥 Bonusuri Active:\n");
+        Map<String, Integer> totalBonuses = item.getTotalBonuses(); // API din model
+
+        if (totalBonuses.isEmpty()) {
+            description.append("  • Fără bonusuri speciale\n");
+        } else {
+            // Grupează bonusurile pentru afișare mai clară
+            Map<String, Integer> coreBonuses = new java.util.HashMap<>();
+            Map<String, Integer> combatBonuses = new java.util.HashMap<>();
+            Map<String, Integer> specialBonuses = new java.util.HashMap<>();
+            Map<String, Integer> enchantBonuses = new java.util.HashMap<>();
+
+            totalBonuses.forEach((stat, bonus) -> {
+                if (stat.startsWith("enchant_")) {
+                    enchantBonuses.put(stat, bonus);
+                } else if (stat.equals("strength") || stat.equals("dexterity") ||
+                        stat.equals("intelligence") || stat.equals("defense")) {
+                    coreBonuses.put(stat, bonus);
+                } else if (stat.equals("Damage") || stat.equals("health") ||
+                        stat.equals("crit_chance") || stat.equals("dodge_chance")) {
+                    combatBonuses.put(stat, bonus);
+                } else {
+                    specialBonuses.put(stat, bonus);
+                }
+            });
+
+            // Afișează pe categorii
+            if (!coreBonuses.isEmpty()) {
+                description.append("\n  📊 STATISTICI PRINCIPALE:\n");
+                coreBonuses.forEach((stat, bonus) ->
+                        description.append("    ").append(getStatIcon(stat))
+                                .append(" +").append(bonus).append(" ").append(formatStatName(stat)).append("\n")
+                );
+            }
+
+            if (!combatBonuses.isEmpty()) {
+                description.append("\n  ⚔️ COMBAT:\n");
+                combatBonuses.forEach((stat, bonus) ->
+                        description.append("    ").append(getStatIcon(stat))
+                                .append(" +").append(bonus).append(" ").append(formatStatName(stat)).append("\n")
+                );
+            }
+
+            if (!specialBonuses.isEmpty()) {
+                description.append("\n  ✨ SPECIALE:\n");
+                specialBonuses.forEach((stat, bonus) ->
+                        description.append("    ").append(getStatIcon(stat))
+                                .append(" +").append(bonus).append(" ").append(formatStatName(stat)).append("\n")
+                );
+            }
+        }
+
+        // 🔮 ENCHANTMENTS din model (API existent)
+        Map<String, Integer> enchantments = item.getAllEnchantments(); // API din model
+        if (!enchantments.isEmpty()) {
+            description.append("\n🔮 ENCHANTMENTS ACTIVE:\n");
+            enchantments.forEach((type, damage) -> {
+                String enchantIcon = getEnchantmentIcon(type);
+                description.append("  ").append(enchantIcon).append(" ")
+                        .append(type.toUpperCase()).append(": +").append(damage)
+                        .append(" elemental damage\n");
+            });
+        }
+
+        // 🏆 ENHANCEMENT BONUSES detaliate (doar dacă există)
+        if (item.getEnhancementLevel() > 0) {
+            Map<String, Integer> enhanceBonuses = item.getEnhancementBonuses();
+            if (!enhanceBonuses.isEmpty()) {
+                description.append("\n⚡ BONUSURI DIN ENHANCEMENT (+")
+                        .append(item.getEnhancementLevel()).append("):\n");
+                enhanceBonuses.forEach((stat, bonus) ->
+                        description.append("  ").append(getStatIcon(stat))
+                                .append(" +").append(bonus).append(" ").append(formatStatName(stat))
+                                .append(" (din enhancement)\n")
+                );
+            }
+        }
+
+        // ✅ FIX: Setează tipul corect pentru UI
+        InventoryItemDTO.ItemType type = equipped
+                ? InventoryItemDTO.ItemType.EQUIPMENT_EQUIPPED
+                : InventoryItemDTO.ItemType.EQUIPMENT;
 
         return new InventoryItemDTO(
                 item,
-                icon + " " + item.getNume(),
+                displayName.toString(),
                 description.toString(),
-                equipped ? InventoryItemDTO.ItemType.EQUIPMENT : InventoryItemDTO.ItemType.EQUIPMENT,
+                type,
                 1,
                 item
         );
     }
+
+    /**
+     * 🎨 Helper pentru iconițe statistici
+     */
+    private String getStatIcon(String stat) {
+        return switch (stat.toLowerCase()) {
+            case "damage" -> "⚔️";
+            case "defense" -> "🛡️";
+            case "health" -> "❤️";
+            case "strength" -> "💪";
+            case "dexterity" -> "🎯";
+            case "intelligence" -> "🧠";
+            case "crit_chance" -> "💥";
+            case "hit_chance" -> "🎯";
+            case "dodge_chance" -> "💨";
+            case "damage_reduction" -> "🛡️";
+            case "gold_find" -> "💰";
+            case "lifesteal" -> "🩸";
+            case "mana_steal" -> "💙";
+            case "elemental_damage" -> "🌈";
+            case "fire_resistance" -> "🔥";
+            case "ice_resistance" -> "❄️";
+            case "damage_bonus" -> "⚔️";
+            default -> "✨";
+        };
+    }
+
+    /**
+     * 🏷️ Helper pentru nume statistici
+     */
+    private String formatStatName(String stat) {
+        return switch (stat.toLowerCase()) {
+            case "damage" -> "Damage";
+            case "defense" -> "Defense";
+            case "health" -> "Health";
+            case "strength" -> "Strength";
+            case "dexterity" -> "Dexterity";
+            case "intelligence" -> "Intelligence";
+            case "crit_chance" -> "Critical Chance %";
+            case "hit_chance" -> "Hit Chance %";
+            case "dodge_chance" -> "Dodge Chance %";
+            case "damage_reduction" -> "Damage Reduction %";
+            case "gold_find" -> "Gold Find %";
+            case "lifesteal" -> "Lifesteal %";
+            case "mana_steal" -> "Mana Steal %";
+            case "elemental_damage" -> "Elemental Damage";
+            case "fire_resistance" -> "Fire Resistance %";
+            case "ice_resistance" -> "Ice Resistance %";
+            case "damage_bonus" -> "Damage Bonus";
+            default -> stat;
+        };
+    }
+
+    /**
+     * 🔮 Helper pentru iconițe enchantments (din model)
+     */
+    private String getEnchantmentIcon(String enchantType) {
+        return switch (enchantType.toLowerCase()) {
+            case "fire" -> "🔥";
+            case "ice" -> "❄️";
+            case "lightning" -> "⚡";
+            case "poison" -> "☠️";
+            case "holy" -> "✨";
+            case "shadow" -> "🌑";
+            case "arcane" -> "🔮";
+            case "nature" -> "🌿";
+            default -> "✨";
+        };
+    }
+
     private InventoryItemDTO createHealingPotionDTO(int healAmount, int quantity) {
         String name = switch (healAmount) {
             case 50 -> "🧪 Poțiune Mică";
