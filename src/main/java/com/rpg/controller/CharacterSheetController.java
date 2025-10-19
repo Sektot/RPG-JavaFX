@@ -27,8 +27,6 @@ public class CharacterSheetController {
     private InventoryServiceFX inventoryService;
 
     // UI Components
-    private Label statsLabel;
-    private VBox equipmentSlotsPanel;
     private ListView<InventoryItemDTO> inventoryListView;
     private VBox realTimeStatsPanel;
 
@@ -52,9 +50,6 @@ public class CharacterSheetController {
         return new Scene(root, 1200, 800);
     }
 
-    /**
-     * Header cu info basic
-     */
     private VBox createHeader() {
         VBox header = new VBox(10);
         header.setPadding(new Insets(20));
@@ -71,20 +66,12 @@ public class CharacterSheetController {
         return header;
     }
 
-    /**
-     * Conținut principal - 3 paneluri
-     */
     private HBox createMainContent() {
         HBox content = new HBox(15);
         content.setPadding(new Insets(20));
 
-        // Panel stâng - Equipment slots
         VBox leftPanel = createEquipmentPanel();
-
-        // Panel mijloc - Inventory
         VBox middlePanel = createInventoryPanel();
-
-        // Panel drept - Stats în timp real
         VBox rightPanel = createRealTimeStatsPanel();
 
         content.getChildren().addAll(leftPanel, middlePanel, rightPanel);
@@ -95,9 +82,6 @@ public class CharacterSheetController {
         return content;
     }
 
-    /**
-     * 🎽 Panel cu slot-urile de echipament - REDESIGN COMPLET
-     */
     private VBox createEquipmentPanel() {
         VBox panel = new VBox(10);
         panel.setPrefWidth(320);
@@ -107,17 +91,10 @@ public class CharacterSheetController {
         Label title = new Label("⚔️ ECHIPAMENT");
         title.setStyle("-fx-font-size: 18px; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        // Grid pentru slot-uri - Layout nou pentru dual-wielding
         GridPane slotsGrid = new GridPane();
         slotsGrid.setHgap(8);
         slotsGrid.setVgap(8);
         slotsGrid.setAlignment(Pos.CENTER);
-
-        // Layout nou:
-        //       [HELMET]
-        //   [RING1] [ARMOR] [RING2]
-        // [MAIN_HAND] [GLOVES] [OFF_HAND]
-        //   [NECKLACE] [BOOTS]
 
         createAndAddSlot(slotsGrid, "HELMET", "⛑️ Cască", 1, 0);
         createAndAddSlot(slotsGrid, "RING1", "💍 Ring 1", 0, 1);
@@ -132,9 +109,7 @@ public class CharacterSheetController {
         panel.getChildren().addAll(title, slotsGrid);
         return panel;
     }
-    /**
-     * 🎒 Panel cu inventarul
-     */
+
     private VBox createInventoryPanel() {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(15));
@@ -143,60 +118,14 @@ public class CharacterSheetController {
         Label title = new Label("🎒 INVENTAR - Drag items to equip");
         title.setStyle("-fx-font-size: 18px; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        // Filter pentru echipament doar
-        ComboBox<String> filterCombo = new ComboBox<>();
-        filterCombo.getItems().addAll("Toate", "Arme", "Armuri", "Accesorii");
-        filterCombo.setValue("Toate");
-        filterCombo.setOnAction(e -> loadInventoryItems());
-
         inventoryListView = new ListView<>();
-        inventoryListView.setStyle("-fx-font-size: 14px;");
+        inventoryListView.setStyle("-fx-font-size: 14px; " +
+                "-fx-background-color: #2c3e50; " +  // ✅ Fundal gri închis
+                "-fx-control-inner-background: #2c3e50;"); // ✅ Fundal intern
+
         VBox.setVgrow(inventoryListView, Priority.ALWAYS);
 
-        // Setup drag pentru inventory items
-//        inventoryListView.setCellFactory(lv -> {
-//            ListCell<InventoryItemDTO> cell = new ListCell<InventoryItemDTO>() {
-//                @Override
-//                protected void updateItem(InventoryItemDTO item, boolean empty) {
-//                    super.updateItem(item, empty);
-//                    if (empty || item == null) {
-//                        setText(null);
-//                        setGraphic(null);
-//                    } else {
-//                        setText(item.toString());
-//                        if (item.isEquipped()) {
-//                            setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
-//                        } else {
-//                            setStyle("");
-//                        }
-//                    }
-//                }
-//            };
-//
-//            // 🖱️ DRAG SOURCE
-//            cell.setOnDragDetected(event -> {
-//                if (cell.getItem() != null && cell.getItem().getEquipment() != null) {
-//                    Dragboard db = cell.startDragAndDrop(TransferMode.MOVE);
-//                    ClipboardContent content = new ClipboardContent();
-//                    content.putString("equipment:" + System.identityHashCode(cell.getItem().getEquipment()));
-//                    db.setContent(content);
-//                    event.consume();
-//                }
-//            });
-//
-//            return cell;
-//        });
-
-        loadInventoryItems();
-
-        panel.getChildren().addAll(title, filterCombo, inventoryListView);
-        return panel;
-    }
-
-    /**
-     * Actualizează setup-ul de drag and drop cu highlighting
-     */
-    private void setupDragAndDrop() {
+        // ✅ DRAG & DROP SETUP
         inventoryListView.setCellFactory(lv -> {
             ListCell<InventoryItemDTO> cell = new ListCell<InventoryItemDTO>() {
                 @Override
@@ -204,30 +133,25 @@ public class CharacterSheetController {
                     super.updateItem(item, empty);
                     if (empty || item == null) {
                         setText(null);
-                        setGraphic(null);
                         setTooltip(null);
+                        setStyle("");
                     } else {
                         setText(item.getName());
 
-                        // ✨ TOOLTIP cu statistici
                         if (item.getEquipment() != null) {
                             Tooltip tooltip = createItemTooltip(item.getEquipment());
                             setTooltip(tooltip);
                         }
 
-                        if (item.isEquipped()) {
-                            setStyle("-fx-background-color: #27ae60; -fx-text-fill: white;");
-                        } else {
-                            setStyle("");
-                        }
+                        // ✅ STIL NORMAL - text alb pe fundal transparent
+                        setStyle("-fx-text-fill: white; -fx-background-color: transparent;");
                     }
                 }
             };
 
-            // 🖱️ DRAG SOURCE cu highlighting
+            // DRAG SOURCE
             cell.setOnDragDetected(event -> {
                 if (cell.getItem() != null && cell.getItem().getEquipment() != null) {
-                    // Highlight compatible slots
                     highlightCompatibleSlots(cell.getItem().getEquipment());
 
                     Dragboard db = cell.startDragAndDrop(TransferMode.MOVE);
@@ -238,72 +162,44 @@ public class CharacterSheetController {
                 }
             });
 
-            // Reset highlighting when drag ends
             cell.setOnDragDone(event -> resetSlotHighlighting());
+
+            // ✅ HOVER EFFECTS cu culori corecte
+            cell.setOnMouseEntered(e -> {
+                if (cell.getItem() != null) {
+                    // Fundal gri închis cu text alb - vizibil!
+                    cell.setStyle("-fx-background-color: #34495e; -fx-text-fill: white;");
+                }
+            });
+
+            cell.setOnMouseExited(e -> {
+                if (cell.getItem() != null) {
+                    // Înapoi la normal - fundal transparent cu text alb
+                    cell.setStyle("-fx-text-fill: white; -fx-background-color: transparent;");
+                }
+            });
 
             return cell;
         });
+
+
+
+        loadInventoryItems();
+        panel.getChildren().addAll(title, inventoryListView);
+        return panel;
     }
 
-    /**
-     * 📋 Creează tooltip cu statistici pentru item
-     */
-    private Tooltip createItemTooltip(ObiectEchipament item) {
-        StringBuilder tooltipText = new StringBuilder();
-
-        tooltipText.append("📦 ").append(item.getNume()).append("\n");
-        tooltipText.append("═══════════════════════════\n");
-        tooltipText.append("🎯 Tip: ").append(item.getTip().getDisplayName()).append("\n");
-        tooltipText.append("⭐ Raritate: ").append(item.getRaritate().getDisplayName()).append("\n");
-        tooltipText.append("📊 Nivel: ").append(item.getNivelNecesar()).append("\n");
-
-        if (item.canEquipInMainHand() || item.canEquipInOffHand()) {
-            tooltipText.append("🤲 Handedness: ").append(item.getHandedness().getDisplayName()).append("\n");
-            if (!item.getWeaponClass().isEmpty()) {
-                tooltipText.append("⚔️ Class: ").append(item.getWeaponClass()).append("\n");
-            }
-        }
-
-        if (item.getEnhancementLevel() > 0) {
-            tooltipText.append("⚡ Enhancement: +").append(item.getEnhancementLevel()).append("\n");
-        }
-
-        tooltipText.append("\n📊 STATISTICI:\n");
-        Map<String, Integer> bonuses = item.getTotalBonuses();
-        if (bonuses.isEmpty()) {
-            tooltipText.append("  • Fără bonusuri\n");
-        } else {
-            bonuses.forEach((stat, bonus) -> {
-                String icon = getStatIcon(stat);
-                String name = formatStatName(stat);
-                tooltipText.append("  ").append(icon).append(" +").append(bonus).append(" ").append(name).append("\n");
-            });
-        }
-
-        tooltipText.append("\n💰 Valoare: ").append(item.getPret()).append(" gold");
-
-        Tooltip tooltip = new Tooltip(tooltipText.toString());
-        tooltip.setStyle("-fx-font-size: 12px; -fx-background-color: #2c3e50; -fx-text-fill: white;");
-        tooltip.setShowDelay(javafx.util.Duration.millis(500));
-
-        return tooltip;
-    }
-
-    /**
-     * 📊 Panel cu stats în timp real
-     */
     private VBox createRealTimeStatsPanel() {
         VBox panel = new VBox(10);
-        panel.setPrefWidth(280);
+        panel.setPrefWidth(320); // ✅ Era 280, acum mai lat
         panel.setPadding(new Insets(15));
         panel.setStyle("-fx-background-color: #16213e; -fx-background-radius: 10;");
 
         Label title = new Label("📊 STATS LIVE");
         title.setStyle("-fx-font-size: 18px; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        realTimeStatsPanel = new VBox(5);
-        realTimeStatsPanel.setStyle("-fx-background-color: #0f1419; -fx-background-radius: 8; -fx-padding: 15;");
-
+        realTimeStatsPanel = new VBox(3); // ✅ Spacing mai mic pentru mai multe stats
+        realTimeStatsPanel.setStyle("-fx-background-color: #0f1419; -fx-background-radius: 8; -fx-padding: 12;");
         updateRealTimeStats();
 
         ScrollPane scrollPane = new ScrollPane(realTimeStatsPanel);
@@ -315,9 +211,7 @@ public class CharacterSheetController {
         return panel;
     }
 
-    /**
-     * Footer cu butoane
-     */
+
     private HBox createFooter() {
         HBox footer = new HBox(15);
         footer.setPadding(new Insets(15));
@@ -345,44 +239,151 @@ public class CharacterSheetController {
 
     // ==================== EQUIPMENT SLOTS ====================
 
-    /**
-     * Inițializează slot-urile pentru noul sistem
-     */
     private void initializeEquipmentSlots() {
-        equipmentSlots.put("MAIN_HAND", new EquipmentSlot("MAIN_HAND",
-                java.util.Set.of(ObiectEchipament.TipEchipament.WEAPON_ONE_HANDED,
-                        ObiectEchipament.TipEchipament.WEAPON_TWO_HANDED)));
+        equipmentSlots.put("MAIN_HAND", new EquipmentSlot("MAIN_HAND"));
+        equipmentSlots.put("OFF_HAND", new EquipmentSlot("OFF_HAND"));
+        equipmentSlots.put("ARMOR", new EquipmentSlot("ARMOR"));
+        equipmentSlots.put("HELMET", new EquipmentSlot("HELMET"));
+        equipmentSlots.put("GLOVES", new EquipmentSlot("GLOVES"));
+        equipmentSlots.put("BOOTS", new EquipmentSlot("BOOTS"));
+        equipmentSlots.put("RING1", new EquipmentSlot("RING1"));
+        equipmentSlots.put("RING2", new EquipmentSlot("RING2"));
+        equipmentSlots.put("NECKLACE", new EquipmentSlot("NECKLACE"));
+    }
 
-        equipmentSlots.put("OFF_HAND", new EquipmentSlot("OFF_HAND",
-                java.util.Set.of(ObiectEchipament.TipEchipament.SHIELD,
-                        ObiectEchipament.TipEchipament.OFF_HAND_WEAPON,
-                        ObiectEchipament.TipEchipament.OFF_HAND_MAGIC)));
+    private void createAndAddSlot(GridPane grid, String slotId, String displayName, int col, int row) {
+        EquipmentSlot slot = equipmentSlots.get(slotId);
 
-        equipmentSlots.put("ARMOR", new EquipmentSlot("ARMOR",
-                java.util.Set.of(ObiectEchipament.TipEchipament.ARMOR)));
+        VBox slotBox = new VBox(5);
+        slotBox.setAlignment(Pos.CENTER);
+        slotBox.setPrefSize(80, 100);
+        slotBox.setStyle("-fx-border-color: #34495e; -fx-border-width: 2; -fx-background-color: #2c3e50; -fx-background-radius: 8;");
 
-        equipmentSlots.put("HELMET", new EquipmentSlot("HELMET",
-                java.util.Set.of(ObiectEchipament.TipEchipament.HELMET)));
+        Label slotLabel = new Label(displayName);
+        slotLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #bdc3c7; -fx-text-alignment: center;");
+        slotLabel.setWrapText(true);
 
-        equipmentSlots.put("GLOVES", new EquipmentSlot("GLOVES",
-                java.util.Set.of(ObiectEchipament.TipEchipament.GLOVES)));
+        Label itemLabel = new Label("Empty");
+        itemLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: white; -fx-text-alignment: center;");
+        itemLabel.setWrapText(true);
+        itemLabel.setPrefHeight(60);
 
-        equipmentSlots.put("BOOTS", new EquipmentSlot("BOOTS",
-                java.util.Set.of(ObiectEchipament.TipEchipament.BOOTS)));
+        // ✅ TOOLTIP pentru slot-uri echipate
+        slotBox.setOnMouseEntered(event -> {
+            ObiectEchipament equippedItem = getCurrentItemForSlot(slotId);
+            if (equippedItem != null) {
+                Tooltip slotTooltip = createEquippedItemTooltip(equippedItem);
+                Tooltip.install(slotBox, slotTooltip);
+            }
+        });
 
-        equipmentSlots.put("RING1", new EquipmentSlot("RING1",
-                java.util.Set.of(ObiectEchipament.TipEchipament.RING)));
+        slotBox.setOnMouseExited(event -> {
+            Tooltip.uninstall(slotBox, null); // ✅ Șterge tooltip când pleci
+        });
 
-        equipmentSlots.put("RING2", new EquipmentSlot("RING2",
-                java.util.Set.of(ObiectEchipament.TipEchipament.RING)));
 
-        equipmentSlots.put("NECKLACE", new EquipmentSlot("NECKLACE",
-                java.util.Set.of(ObiectEchipament.TipEchipament.NECKLACE)));
+        slotBox.getChildren().addAll(slotLabel, itemLabel);
+
+        // ✅ DRAG TARGET
+        slotBox.setOnDragOver(event -> {
+            if (event.getDragboard().hasString() && event.getDragboard().getString().startsWith("equipment:")) {
+                event.acceptTransferModes(TransferMode.MOVE);
+            }
+            event.consume();
+        });
+
+        slotBox.setOnDragDropped(event -> {
+            Dragboard db = event.getDragboard();
+            boolean success = false;
+
+            if (db.hasString() && db.getString().startsWith("equipment:")) {
+                String itemHash = db.getString().substring("equipment:".length());
+                ObiectEchipament item = findItemByHash(itemHash);
+
+                if (item != null && canEquipInSlot(item, slotId)) {
+                    equipItemInSlot(item, slotId);
+                    success = true;
+                }
+            }
+
+            event.setDropCompleted(success);
+            event.consume();
+        });
+
+        // ✅ DOUBLE CLICK pentru deechipare
+        slotBox.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                unequipFromSlot(slotId);
+            }
+        });
+
+        slot.setSlotBox(slotBox);
+        slot.setItemLabel(itemLabel);
+
+        grid.add(slotBox, col, row);
+        updateSlotDisplay(slotId);
+    }
+
+    // ==================== HELPERS ====================
+
+    private ObiectEchipament findItemByHash(String hash) {
+        for (ObiectEchipament item : hero.getInventar().getItems()) {
+            if (String.valueOf(System.identityHashCode(item)).equals(hash)) {
+                return item;
+            }
+        }
+        return null;
     }
 
     /**
-     * ✨ HIGHLIGHTING MAGIC - Calculează ce slot-uri sunt compatibile
+     * 📋 Tooltip pentru iteme echipate în slot-uri
      */
+    private Tooltip createEquippedItemTooltip(ObiectEchipament item) {
+        StringBuilder tooltipText = new StringBuilder();
+
+        tooltipText.append("⚔️ ECHIPAT: ").append(item.getNume()).append("\n");
+        tooltipText.append("═══════════════════════════\n");
+        tooltipText.append("🎯 Tip: ").append(item.getTip().getDisplayName()).append("\n");
+        tooltipText.append("⭐ Raritate: ").append(item.getRaritate().getDisplayName()).append("\n");
+        tooltipText.append("📊 Nivel: ").append(item.getNivelNecesar()).append("\n");
+
+        if (item.canEquipInMainHand() || item.canEquipInOffHand()) {
+            tooltipText.append("🤲 Handedness: ").append(item.getHandedness().getDisplayName()).append("\n");
+            if (!item.getWeaponClass().isEmpty()) {
+                tooltipText.append("⚔️ Class: ").append(item.getWeaponClass()).append("\n");
+            }
+        }
+
+        if (item.getEnhancementLevel() > 0) {
+            tooltipText.append("⚡ Enhancement: +").append(item.getEnhancementLevel()).append("\n");
+        }
+
+        tooltipText.append("\n📊 BONUSURI ACTIVE:\n");
+        Map<String, Integer> bonuses = item.getTotalBonuses();
+
+        if (bonuses.isEmpty()) {
+            tooltipText.append("  • Fără bonusuri");
+        } else {
+            bonuses.forEach((stat, bonus) -> {
+                String icon = getStatIcon(stat);
+                String name = formatStatName(stat);
+                tooltipText.append("  ").append(icon).append(" +").append(bonus).append(" ").append(name).append("\n");
+            });
+        }
+
+        tooltipText.append("\n💰 Valoare: ").append(item.getPret()).append(" gold");
+        tooltipText.append("\n\n💡 Dublu-click pentru deechipare");
+
+        Tooltip tooltip = new Tooltip(tooltipText.toString());
+        tooltip.setStyle("-fx-font-size: 12px; -fx-background-color: #2d5a3d; -fx-text-fill: white; -fx-max-width: 350px; -fx-wrap-text: true;");
+        tooltip.setShowDelay(javafx.util.Duration.millis(300));
+        tooltip.setHideDelay(javafx.util.Duration.millis(100));
+        tooltip.setShowDuration(javafx.util.Duration.INDEFINITE); // ✅ Stă permanent
+
+        return tooltip;
+    }
+
+
     private java.util.Set<String> getCompatibleSlots(ObiectEchipament item) {
         java.util.Set<String> compatibleSlots = new java.util.HashSet<>();
 
@@ -391,9 +392,7 @@ public class CharacterSheetController {
         switch (item.getTip()) {
             case WEAPON_ONE_HANDED -> {
                 compatibleSlots.add("MAIN_HAND");
-                // Verifică dacă poate merge în off-hand
                 if (item.isOffHandCompatible()) {
-                    // Doar dacă nu avem two-handed în main hand
                     ObiectEchipament mainHand = hero.getMainHandWeapon();
                     if (mainHand == null || !mainHand.isTwoHanded()) {
                         compatibleSlots.add("OFF_HAND");
@@ -402,7 +401,6 @@ public class CharacterSheetController {
             }
             case WEAPON_TWO_HANDED -> compatibleSlots.add("MAIN_HAND");
             case SHIELD -> {
-                // Doar dacă nu avem two-handed weapon
                 ObiectEchipament mainHand = hero.getMainHandWeapon();
                 if (mainHand == null || !mainHand.isTwoHanded()) {
                     compatibleSlots.add("OFF_HAND");
@@ -436,147 +434,76 @@ public class CharacterSheetController {
 
         equipmentSlots.forEach((slotId, slot) -> {
             VBox slotBox = slot.getSlotBox();
+            ObiectEchipament currentItem = getCurrentItemForSlot(slotId);
+
             if (compatibleSlots.contains(slotId)) {
-                // Highlight verde pentru slot-uri compatibile
-                slotBox.setStyle("-fx-border-color: #27ae60; -fx-border-width: 3; " +
+                // ✅ Highlight VERDE pentru slot-uri compatibile
+                slotBox.setStyle("-fx-border-color: #27ae60; -fx-border-width: 4; " +
                         "-fx-background-color: #2d5a3d; -fx-background-radius: 8; " +
-                        "-fx-effect: dropshadow(gaussian, #27ae60, 10, 0.7, 0, 0);");
+                        "-fx-effect: dropshadow(gaussian, #27ae60, 15, 0.8, 0, 0);");
             } else {
-                // Highlight roșu pentru slot-uri incompatibile
-                slotBox.setStyle("-fx-border-color: #e74c3c; -fx-border-width: 2; " +
-                        "-fx-background-color: #5a2d2d; -fx-background-radius: 8; " +
-                        "-fx-effect: dropshadow(gaussian, #e74c3c, 5, 0.5, 0, 0);");
+                // ✅ Păstrează stilul NORMAL pentru slot-urile incompatibile
+                if (currentItem != null) {
+                    // Slot ocupat - stil normal ocupat
+                    slotBox.setStyle("-fx-border-color: #34495e; -fx-border-width: 2; " +
+                            "-fx-background-color: #2d5a3d; -fx-background-radius: 8; " +
+                            "-fx-effect: null;");
+                } else {
+                    // Slot gol - stil normal gol
+                    slotBox.setStyle("-fx-border-color: #34495e; -fx-border-width: 2; " +
+                            "-fx-background-color: #2c3e50; -fx-background-radius: 8; " +
+                            "-fx-effect: null;");
+                }
             }
         });
     }
 
+
     /**
-     * 🎯 Resetează highlighting-ul slot-urilor
+     * 🎯 Resetează highlighting-ul slot-urilor - FIX pentru bare verzi
      */
     private void resetSlotHighlighting() {
-        equipmentSlots.forEach((slotId, slot) -> updateSlotDisplay(slotId));
+        equipmentSlots.forEach((slotId, slot) -> {
+            // ✅ FORȚEAZĂ resetarea completă a stilului
+            VBox slotBox = slot.getSlotBox();
+            ObiectEchipament currentItem = getCurrentItemForSlot(slotId);
+
+            if (currentItem != null) {
+                // Slot ocupat - verde normal
+                slotBox.setStyle("-fx-border-color: #27ae60; -fx-border-width: 2; " +
+                        "-fx-background-color: #2d5a3d; -fx-background-radius: 8; " +
+                        "-fx-effect: null;"); // ✅ Elimină efectele
+            } else {
+                // Slot gol - stil normal
+                slotBox.setStyle("-fx-border-color: #34495e; -fx-border-width: 2; " +
+                        "-fx-background-color: #2c3e50; -fx-background-radius: 8; " +
+                        "-fx-effect: null;"); // ✅ Elimină efectele
+            }
+        });
     }
 
 
-
-    /**
-     * Creează și adaugă un slot în grid
-     */
-    private void createAndAddSlot(GridPane grid, String slotId, String displayName, int col, int row) {
-        EquipmentSlot slot = equipmentSlots.get(slotId);
-
-        VBox slotBox = new VBox(5);
-        slotBox.setAlignment(Pos.CENTER);
-        slotBox.setPrefSize(80, 100);
-        slotBox.setStyle("-fx-border-color: #34495e; -fx-border-width: 2; -fx-background-color: #2c3e50; -fx-background-radius: 8;");
-
-        Label slotLabel = new Label(displayName);
-        slotLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #bdc3c7; -fx-text-alignment: center;");
-        slotLabel.setWrapText(true);
-
-        Label itemLabel = new Label();
-        itemLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: white; -fx-text-alignment: center;");
-        itemLabel.setWrapText(true);
-        itemLabel.setPrefHeight(60);
-
-        slotBox.getChildren().addAll(slotLabel, itemLabel);
-
-        // 🎯 DRAG TARGET
-        slotBox.setOnDragOver(event -> {
-            if (event.getGestureSource() != slotBox && event.getDragboard().hasString()) {
-                String content = event.getDragboard().getString();
-                if (content.startsWith("equipment:")) {
-                    event.acceptTransferModes(TransferMode.MOVE);
-                    slotBox.setStyle("-fx-border-color: #27ae60; -fx-border-width: 3; -fx-background-color: #34495e; -fx-background-radius: 8;");
-                }
-            }
-            event.consume();
-        });
-
-        slotBox.setOnDragExited(event -> {
-            slotBox.setStyle("-fx-border-color: #34495e; -fx-border-width: 2; -fx-background-color: #2c3e50; -fx-background-radius: 8;");
-            event.consume();
-        });
-
-        slotBox.setOnDragDropped(event -> {
-            Dragboard db = event.getDragboard();
-            boolean success = false;
-
-            if (db.hasString() && db.getString().startsWith("equipment:")) {
-                String itemHash = db.getString().substring("equipment:".length());
-                ObiectEchipament item = findItemByHash(itemHash);
-
-                if (item != null && canEquipInSlot(item, slotId)) {
-                    equipItemInSlot(item, slotId);
-                    success = true;
-                }
-            }
-
-            event.setDropCompleted(success);
-            event.consume();
-        });
-
-        // 🖱️ DOUBLE CLICK pentru deechipare
-        slotBox.setOnMouseClicked(event -> {
-            if (event.getClickCount() == 2) {
-                unequipFromSlot(slotId);
-            }
-        });
-
-        slot.setSlotBox(slotBox);
-        slot.setItemLabel(itemLabel);
-
-        grid.add(slotBox, col, row);
-        updateSlotDisplay(slotId);
-    }
-
-    // ==================== DRAG & DROP LOGIC ====================
-
-    /**
-     * Găsește item pe baza hash-ului
-     */
-    private ObiectEchipament findItemByHash(String hash) {
-        for (ObiectEchipament item : hero.getInventar().getItems()) {
-            if (String.valueOf(System.identityHashCode(item)).equals(hash)) {
-                return item;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Verifică dacă item-ul poate fi echipat în slot - ACTUALIZAT
-     */
     private boolean canEquipInSlot(ObiectEchipament item, String slotId) {
         return getCompatibleSlots(item).contains(slotId);
     }
 
-    /**
-     * Echipează item în slot - ACTUALIZAT pentru noul sistem
-     */
     private void equipItemInSlot(ObiectEchipament item, String slotId) {
         try {
-            // Folosește noul sistem de echipare
             EquipResult result = hero.equipItem(item);
 
             if (result.isSuccess()) {
                 updateAllSlots();
                 updateRealTimeStats();
                 loadInventoryItems();
-
                 DialogHelper.showSuccess("Echipat!", result.getMessage());
             } else {
                 DialogHelper.showError("Nu se poate echipa", result.getMessage());
             }
-
         } catch (Exception e) {
             DialogHelper.showError("Eroare", "Nu s-a putut echipa itemul: " + e.getMessage());
-            e.printStackTrace();
         }
     }
-    /**
-     * Deechipează din slot - ACTUALIZAT
-     */
+
     private void unequipFromSlot(String slotId) {
         try {
             EquipResult result = hero.unequipFromSlot(slotId);
@@ -585,36 +512,30 @@ public class CharacterSheetController {
                 updateAllSlots();
                 updateRealTimeStats();
                 loadInventoryItems();
-
                 DialogHelper.showSuccess("Deechipat!", result.getMessage());
             } else {
                 DialogHelper.showWarning("Nu se poate deechipa", result.getMessage());
             }
-
         } catch (Exception e) {
             DialogHelper.showError("Eroare", "Nu s-a putut deechipa itemul: " + e.getMessage());
-            e.printStackTrace();
         }
     }
-    // ==================== HELPERS ====================
 
     /**
-     * Încarcă items din inventar
+     * Încarcă items din inventar - ASCUNDE itemele echipate
      */
     private void loadInventoryItems() {
         var items = inventoryService.getItemsByCategory(hero, InventoryServiceFX.InventoryCategory.TOATE)
                 .stream()
-                .filter(item -> item.getType() == InventoryItemDTO.ItemType.EQUIPMENT ||
-                        item.getType() == InventoryItemDTO.ItemType.EQUIPMENT_EQUIPPED)
+                .filter(item -> item.getType() == InventoryItemDTO.ItemType.EQUIPMENT) // ✅ Doar NEECHIPATE
+                // ✅ Nu mai includem EQUIPMENT_EQUIPPED - vor dispărea din inventar când sunt echipate
                 .toList();
 
         inventoryListView.getItems().clear();
         inventoryListView.getItems().addAll(items);
     }
 
-    /**
-     * Actualizează toate slot-urile
-     */
+
     private void updateAllSlots() {
         for (String slotId : equipmentSlots.keySet()) {
             updateSlotDisplay(slotId);
@@ -622,7 +543,7 @@ public class CharacterSheetController {
     }
 
     /**
-     * Actualizează afișarea unui slot
+     * Actualizează afișarea unui slot - CONSISTENT STYLING
      */
     private void updateSlotDisplay(String slotId) {
         EquipmentSlot slot = equipmentSlots.get(slotId);
@@ -631,21 +552,31 @@ public class CharacterSheetController {
         slot.setCurrentItem(currentItem);
 
         if (currentItem != null) {
+            // ✅ SLOT OCUPAT
             String displayText = currentItem.getTip().getIcon() + "\n" +
-                    currentItem.getNume().substring(0, Math.min(currentItem.getNume().length(), 15));
-            if (currentItem.getNume().length() > 15) displayText += "...";
+                    currentItem.getNume().substring(0, Math.min(currentItem.getNume().length(), 12));
+            if (currentItem.getNume().length() > 12) displayText += "...";
 
             slot.getItemLabel().setText(displayText);
-            slot.getSlotBox().setStyle("-fx-border-color: #27ae60; -fx-border-width: 2; -fx-background-color: #2d5a3d; -fx-background-radius: 8;");
+            slot.getItemLabel().setStyle("-fx-font-size: 10px; -fx-text-fill: white; -fx-text-alignment: center;");
+
+            // Stil consistent pentru slot-uri ocupate
+            slot.getSlotBox().setStyle("-fx-border-color: #27ae60; -fx-border-width: 2; " +
+                    "-fx-background-color: #2d5a3d; -fx-background-radius: 8; " +
+                    "-fx-effect: null;");
         } else {
+            // ✅ SLOT GOL
             slot.getItemLabel().setText("Empty");
-            slot.getSlotBox().setStyle("-fx-border-color: #34495e; -fx-border-width: 2; -fx-background-color: #2c3e50; -fx-background-radius: 8;");
+            slot.getItemLabel().setStyle("-fx-font-size: 10px; -fx-text-fill: #7f8c8d; -fx-text-alignment: center;");
+
+            // Stil consistent pentru slot-uri goale
+            slot.getSlotBox().setStyle("-fx-border-color: #34495e; -fx-border-width: 2; " +
+                    "-fx-background-color: #2c3e50; -fx-background-radius: 8; " +
+                    "-fx-effect: null;");
         }
     }
 
-    /**
-     * Obține item-ul curent pentru un slot - ACTUALIZAT pentru noul sistem
-     */
+
     private ObiectEchipament getCurrentItemForSlot(String slotId) {
         return switch (slotId) {
             case "MAIN_HAND" -> hero.getMainHandWeapon();
@@ -661,11 +592,209 @@ public class CharacterSheetController {
         };
     }
 
+    // ✅ TOOLTIP creator cu toate stat-urile
     /**
-     * Actualizează stats-urile în timp real
+     * 📋 Creează tooltip cu statistici și COMPARAȚIE pentru item
+     */
+    /**
+     * 📋 Creează tooltip cu statistici și COMPARAȚIE pentru item
+     */
+    private Tooltip createItemTooltip(ObiectEchipament item) {
+        StringBuilder tooltipText = new StringBuilder();
+
+        // HEADER
+        tooltipText.append("📦 ").append(item.getNume()).append("\n");
+        tooltipText.append("═══════════════════════════\n");
+        tooltipText.append("🎯 Tip: ").append(item.getTip().getDisplayName()).append("\n");
+        tooltipText.append("⭐ Raritate: ").append(item.getRaritate().getDisplayName()).append("\n");
+        tooltipText.append("📊 Nivel: ").append(item.getNivelNecesar()).append("\n");
+
+        if (item.canEquipInMainHand() || item.canEquipInOffHand()) {
+            tooltipText.append("🤲 Handedness: ").append(item.getHandedness().getDisplayName()).append("\n");
+            if (!item.getWeaponClass().isEmpty()) {
+                tooltipText.append("⚔️ Class: ").append(item.getWeaponClass()).append("\n");
+            }
+        }
+
+        if (item.getEnhancementLevel() > 0) {
+            tooltipText.append("⚡ Enhancement: +").append(item.getEnhancementLevel()).append("\n");
+        }
+
+        tooltipText.append("\n📊 STATISTICI:\n");
+
+        // ✅ GĂSEȘTE ITEM-UL ECHIPAT PENTRU COMPARAȚIE
+        ObiectEchipament equippedItem = findEquippedItemForComparison(item);
+
+        Map<String, Integer> newBonuses = item.getTotalBonuses();
+        Map<String, Integer> equippedBonuses = equippedItem != null ?
+                equippedItem.getTotalBonuses() :
+                new HashMap<>();
+
+        if (newBonuses.isEmpty()) {
+            tooltipText.append("  • Fără bonusuri\n");
+        } else {
+            // Sortează stats pentru afișare consistentă
+            String[] statOrder = {"Damage", "strength", "dexterity", "intelligence", "defense",
+                    "health", "mana", "crit_chance", "hit_chance", "dodge_chance",
+                    "damage_bonus", "attack_bonus", "lifesteal", "gold_find"};
+
+            // ✅ AFIȘEAZĂ STATS ÎN ORDINE CU COMPARAȚIE
+            for (String stat : statOrder) {
+                if (newBonuses.containsKey(stat)) {
+                    addStatToTooltip(tooltipText, stat, newBonuses.get(stat),
+                            equippedBonuses.getOrDefault(stat, 0), equippedItem != null);
+                }
+            }
+
+            // Stats rămase (cele care nu sunt în ordine)
+            newBonuses.forEach((stat, newValue) -> {
+                boolean inOrder = java.util.Arrays.asList(statOrder).contains(stat);
+                if (!inOrder) {
+                    addStatToTooltip(tooltipText, stat, newValue,
+                            equippedBonuses.getOrDefault(stat, 0), equippedItem != null);
+                }
+            });
+
+            // ✅ STATS PE CARE LE PIERZI
+            if (equippedItem != null) {
+                equippedBonuses.forEach((stat, equippedValue) -> {
+                    if (!newBonuses.containsKey(stat) && equippedValue > 0) {
+                        String icon = getStatIcon(stat);
+                        String name = formatStatName(stat);
+                        tooltipText.append("  ").append(icon).append(" 0 ").append(name)
+                                .append(" ❌(-").append(equippedValue).append(")\n");
+                    }
+                });
+            }
+        }
+
+        // ✅ SUMAR COMPARAȚIE
+        if (equippedItem != null) {
+            tooltipText.append("\n⚔️ VS ECHIPAT:\n");
+            tooltipText.append("📦 ").append(equippedItem.getNume()).append("\n");
+
+            int betterStats = 0, worseStats = 0, equalStats = 0;
+
+            for (String stat : getAllUniqueStats(newBonuses, equippedBonuses)) {
+                int newVal = newBonuses.getOrDefault(stat, 0);
+                int equippedVal = equippedBonuses.getOrDefault(stat, 0);
+
+                if (newVal > equippedVal) betterStats++;
+                else if (newVal < equippedVal) worseStats++;
+                else if (newVal > 0) equalStats++;
+            }
+
+            if (betterStats > 0) {
+                tooltipText.append("✅ ").append(betterStats).append(" îmbunătățiri\n");
+            }
+            if (worseStats > 0) {
+                tooltipText.append("❌ ").append(worseStats).append(" scăderi\n");
+            }
+            if (equalStats > 0) {
+                tooltipText.append("⚖️ ").append(equalStats).append(" identici\n");
+            }
+        }
+
+
+
+        tooltipText.append("\n💰 Valoare: ").append(item.getPret()).append(" gold");
+
+        Tooltip tooltip = new Tooltip(tooltipText.toString());
+        tooltip.setStyle("-fx-font-size: 12px; -fx-background-color: #2c3e50; -fx-text-fill: white; -fx-max-width: 350px; -fx-wrap-text: true;");
+
+        // ✅ TOOLTIP SETTINGS pentru hover permanent
+        tooltip.setShowDelay(javafx.util.Duration.millis(300));    // Apare repede
+        tooltip.setHideDelay(javafx.util.Duration.millis(100));    // Se ascunde repede când pleci
+        tooltip.setShowDuration(javafx.util.Duration.INDEFINITE); // ✅ Stă cât faci hover!
+
+        return tooltip;
+    }
+
+    private ObiectEchipament findEquippedItemForComparison(ObiectEchipament newItem) {
+        return switch (newItem.getTip()) {
+            case WEAPON_ONE_HANDED, WEAPON_TWO_HANDED -> hero.getMainHandWeapon();
+            case SHIELD, OFF_HAND_WEAPON, OFF_HAND_MAGIC -> hero.getOffHandItem();
+            case ARMOR -> hero.getArmorEquipped();
+            case HELMET -> hero.getHelmetEquipped();
+            case GLOVES -> hero.getGlovesEquipped();
+            case BOOTS -> hero.getBootsEquipped();
+            case NECKLACE -> hero.getNecklaceEquipped();
+            case RING -> {
+                // Pentru ring-uri, compară cu cel mai slab ring echipat (pentru a înlocui)
+                ObiectEchipament ring1 = hero.getRing1Equipped();
+                ObiectEchipament ring2 = hero.getRing2Equipped();
+
+                if (ring1 == null && ring2 == null) yield null;
+                if (ring1 == null) yield ring2;
+                if (ring2 == null) yield ring1;
+
+                // Compară care ring e mai slab (pentru înlocuire)
+                int ring1Value = ring1.getTotalBonuses().values().stream().mapToInt(Integer::intValue).sum();
+                int ring2Value = ring2.getTotalBonuses().values().stream().mapToInt(Integer::intValue).sum();
+
+                yield ring1Value <= ring2Value ? ring1 : ring2; // Returnează cel mai slab
+            }
+            default -> null;
+        };
+    }
+
+    /**
+     * ✨ Helper pentru adăugarea unui stat cu comparație în tooltip
+     */
+    private void addStatToTooltip(StringBuilder tooltip, String stat, int newValue, int equippedValue, boolean hasEquipped) {
+        String icon = getStatIcon(stat);
+        String name = formatStatName(stat);
+
+        if (!hasEquipped || equippedValue == 0) {
+            // Niciun item echipat sau stat nou
+            tooltip.append("  ").append(icon).append(" +").append(newValue).append(" ").append(name).append("\n");
+        } else {
+            int difference = newValue - equippedValue;
+
+            if (difference > 0) {
+                // ✅ Verde pentru îmbunătățire
+                tooltip.append("  ").append(icon).append(" +").append(newValue).append(" ").append(name)
+                        .append(" ✅(+").append(difference).append(")\n");
+            } else if (difference < 0) {
+                // ❌ Roșu pentru scădere
+                tooltip.append("  ").append(icon).append(" +").append(newValue).append(" ").append(name)
+                        .append(" ❌(").append(difference).append(")\n");
+            } else {
+                // ⚖️ Același
+                tooltip.append("  ").append(icon).append(" +").append(newValue).append(" ").append(name).append(" ⚖️\n");
+            }
+        }
+    }
+    /**
+     * 📝 Obține toate statisticile unice din ambele iteme
+     */
+    private java.util.Set<String> getAllUniqueStats(Map<String, Integer> bonuses1, Map<String, Integer> bonuses2) {
+        java.util.Set<String> allStats = new java.util.HashSet<>(bonuses1.keySet());
+        allStats.addAll(bonuses2.keySet());
+        return allStats;
+    }
+
+    /**
+     * Actualizează stats-urile în timp real - EXTENDED VERSION
      */
     private void updateRealTimeStats() {
         realTimeStatsPanel.getChildren().clear();
+
+        // ✅ NIVEL ȘI PROGRES XP
+        addStatRow("⭐ Level", String.valueOf(hero.getNivel()));
+
+// Calculează procentul XP
+        double xpPercent = ((double) hero.getExperienta() / hero.getExpNecesara()) * 100;
+        String xpDisplay = hero.getExperienta() + "/" + hero.getExpNecesara() +
+                String.format(" (%.1f%%)", xpPercent);
+        addStatRow("📊 XP", xpDisplay);
+
+// Stat points dacă există
+        if (hero.getStatPointsToAllocate() > 0) {
+            addStatRow("🎯 Stat Points", String.valueOf(hero.getStatPointsToAllocate()));
+        }
+
+        addSeparator();
 
         // HP & Resources
         addStatRow("❤️ HP", hero.getViata() + "/" + hero.getViataMaxima());
@@ -681,33 +810,146 @@ public class CharacterSheetController {
 
         addSeparator();
 
-        // Combat Stats
-        addStatRow("🎯 Hit Chance", String.format("%.1f%%", hero.getHitChance()));
-        addStatRow("💥 Crit Chance", String.format("%.1f%%", hero.getCritChanceTotal()));
-        addStatRow("💨 Dodge Chance", String.format("%.1f%%", hero.getDodgeChanceTotal()));
+        // Combat Stats cu breakdown
+        Map<String, Integer> allBonuses = getHeroAllBonuses();
 
-        // Equipment Bonuses
-        Map<String, Integer> bonuses = getHeroAllBonuses();
-        if (!bonuses.isEmpty()) {
-            addSeparator();
-            Label bonusTitle = new Label("✨ BONUSURI:");
-            bonusTitle.setStyle("-fx-text-fill: #f39c12; -fx-font-weight: bold; -fx-font-size: 12px;");
-            realTimeStatsPanel.getChildren().add(bonusTitle);
+        double baseHit = getBaseHitChance();
+        int hitEquipBonus = allBonuses.getOrDefault("hit_chance", 0);
+        addWoWPercentStatRow("🎯 Hit Chance", baseHit, hitEquipBonus);
 
-            bonuses.forEach((stat, bonus) -> {
-                if (!stat.equals("strength") && !stat.equals("dexterity") &&
-                        !stat.equals("intelligence") && !stat.equals("defense")) {
-                    String icon = getStatIcon(stat);
-                    String name = formatStatName(stat);
-                    addStatRow(icon + " " + name, "+" + bonus);
-                }
-            });
+        double baseCrit = getBaseCritChance();
+        int critEquipBonus = allBonuses.getOrDefault("crit_chance", 0);
+        addWoWPercentStatRow("💥 Crit Chance", baseCrit, critEquipBonus);
+
+        double baseDodge = getBaseDodgeChance();
+        int dodgeEquipBonus = allBonuses.getOrDefault("dodge_chance", 0);
+        addWoWPercentStatRow("💨 Dodge Chance", baseDodge, dodgeEquipBonus);
+
+        // ✅ DAMAGE SECTION - ÎNTOTDEAUNA VIZIBILĂ
+        addSeparator();
+        Label damageTitle = new Label("⚔️ DAMAGE:");
+        damageTitle.setStyle("-fx-text-fill: #e74c3c; -fx-font-weight: bold; -fx-font-size: 12px;");
+        realTimeStatsPanel.getChildren().add(damageTitle);
+
+        int weaponDamage = allBonuses.getOrDefault("Damage", 0);
+        int damageBonus = allBonuses.getOrDefault("damage_bonus", 0);
+        int attackBonus = allBonuses.getOrDefault("attack_bonus", 0);
+
+        addStatRow("⚔️ Weapon Damage", weaponDamage > 0 ? String.valueOf(weaponDamage) : "0");
+        if (damageBonus > 0) {
+            addStatRow("⚔️ Damage Bonus", "+" + damageBonus);
         }
+        if (attackBonus > 0) {
+            addStatRow("⚔️ Attack Bonus", "+" + attackBonus);
+        }
+
+        // Damage total estimativ
+        int totalWeaponDamage = weaponDamage + damageBonus + attackBonus;
+        int estimatedDamage = hero.getStrengthTotal() * 2 + totalWeaponDamage;
+        addStatRow("💀 Est. Total", String.valueOf(estimatedDamage));
+
+        // ✅ DEFENSE SECTION - ÎNTOTDEAUNA VIZIBILĂ
+        addSeparator();
+        Label defenseTitle = new Label("🛡️ DEFENSE:");
+        defenseTitle.setStyle("-fx-text-fill: #3498db; -fx-font-weight: bold; -fx-font-size: 12px;");
+        realTimeStatsPanel.getChildren().add(defenseTitle);
+
+        int equipHealth = allBonuses.getOrDefault("health", 0);
+        int damageReduction = allBonuses.getOrDefault("damage_reduction", 0);
+        int blockChance = allBonuses.getOrDefault("block_chance", 0);
+
+        if (equipHealth > 0) {
+            addStatRow("❤️ Bonus HP", "+" + equipHealth);
+        } else {
+            addStatRow("❤️ Bonus HP", "0");
+        }
+
+        addStatRow("🛡️ Damage Reduction", damageReduction > 0 ? damageReduction + "%" : "0%");
+        addStatRow("🛡️ Block Chance", blockChance > 0 ? blockChance + "%" : "0%");
+
+        // ✅ UTILITY SECTION - ÎNTOTDEAUNA VIZIBILĂ
+        addSeparator();
+        Label utilityTitle = new Label("✨ UTILITY:");
+        utilityTitle.setStyle("-fx-text-fill: #f39c12; -fx-font-weight: bold; -fx-font-size: 12px;");
+        realTimeStatsPanel.getChildren().add(utilityTitle);
+
+        int lifesteal = allBonuses.getOrDefault("lifesteal", 0);
+        int goldFind = allBonuses.getOrDefault("gold_find", 0);
+        int fireRes = allBonuses.getOrDefault("fire_resistance", 0);
+        int iceRes = allBonuses.getOrDefault("ice_resistance", 0);
+        int manaSteal = allBonuses.getOrDefault("mana_steal", 0);
+        int elementalDmg = allBonuses.getOrDefault("elemental_damage", 0);
+
+        addStatRow("🩸 Lifesteal", lifesteal > 0 ? lifesteal + "%" : "0%");
+        addStatRow("💰 Gold Find", goldFind > 0 ? "+" + goldFind + "%" : "0%");
+        addStatRow("💙 Mana Steal", manaSteal > 0 ? manaSteal + "%" : "0%");
+        addStatRow("🌈 Elemental", elementalDmg > 0 ? "+" + elementalDmg : "0");
+        addStatRow("🔥 Fire Res", fireRes > 0 ? fireRes + "%" : "0%");
+        addStatRow("❄️ Ice Res", iceRes > 0 ? iceRes + "%" : "0%");
+
+        addSeparator();
+        int equippedCount = (int) equipmentSlots.values().stream()
+                .filter(slot -> slot.getCurrentItem() != null)
+                .count();
+        addStatRow("📦 Equipped", equippedCount + "/" + equipmentSlots.size());
     }
 
     /**
-     * Adaugă un rând de stat WoW style
+     * ✅ Adaugă un rând pentru percent stats cu breakdown WoW style
      */
+    private void addWoWPercentStatRow(String name, double base, int equipmentBonus) {
+        HBox row = new HBox(5);
+        row.setAlignment(Pos.CENTER_LEFT);
+
+        Label nameLabel = new Label(name + ":");
+        nameLabel.setPrefWidth(120);
+        nameLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px;");
+
+        // Format: "75.0 + 5 = 80.0%"
+        String valueText;
+        if (equipmentBonus > 0) {
+            double total = base + equipmentBonus;
+            valueText = String.format("%.1f + %d = %.1f%%", base, equipmentBonus, total);
+        } else {
+            valueText = String.format("%.1f%%", base);
+        }
+
+        Label valueLabel = new Label(valueText);
+        String color = equipmentBonus > 0 ? "#27ae60" : "#bdc3c7";
+        valueLabel.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 12px; -fx-font-weight: bold;");
+
+        row.getChildren().addAll(nameLabel, valueLabel);
+        realTimeStatsPanel.getChildren().add(row);
+    }
+
+
+    /**
+     * ✅ Adaugă un rând pentru combat stats cu equipment bonus
+     */
+    private void addCombatStatWithEquipment(String name, double baseValue, int equipmentBonus) {
+        HBox row = new HBox(5);
+        row.setAlignment(Pos.CENTER_LEFT);
+
+        Label nameLabel = new Label(name + ":");
+        nameLabel.setPrefWidth(120);
+        nameLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px;");
+
+        double totalValue = baseValue + equipmentBonus;
+        String valueText = String.format("%.1f%%", totalValue);
+
+        if (equipmentBonus > 0) {
+            valueText += String.format(" (+%d)", equipmentBonus);
+        }
+
+        Label valueLabel = new Label(valueText);
+        String color = equipmentBonus > 0 ? "#27ae60" : "#bdc3c7";
+        valueLabel.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 12px; -fx-font-weight: bold;");
+
+        row.getChildren().addAll(nameLabel, valueLabel);
+        realTimeStatsPanel.getChildren().add(row);
+    }
+
+
     private void addWoWStatRow(String name, int base, int total) {
         HBox row = new HBox(5);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -726,9 +968,6 @@ public class CharacterSheetController {
         realTimeStatsPanel.getChildren().add(row);
     }
 
-    /**
-     * Adaugă un rând de stat normal
-     */
     private void addStatRow(String name, String value) {
         HBox row = new HBox(5);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -744,31 +983,11 @@ public class CharacterSheetController {
         realTimeStatsPanel.getChildren().add(row);
     }
 
-    /**
-     * Adaugă separator
-     */
     private void addSeparator() {
         Label sep = new Label("─────────────────");
         sep.setStyle("-fx-text-fill: #34495e; -fx-font-size: 10px;");
         realTimeStatsPanel.getChildren().add(sep);
     }
-
-    // ==================== RING LOGIC ====================
-
-    /**
-     * Logică specială pentru ring-uri (2 slot-uri)
-     */
-    private void handleRingEquip(ObiectEchipament ring, String slotId) {
-        // Pentru moment, folosește slot-ul unic existent
-        // În viitor, poți extinde pentru 2 ring-uri separate
-        hero.echipeazaAccesoriu(ring);
-    }
-
-    private void handleRingUnequip(String slotId) {
-        hero.deechipeazaAccesoriu();
-    }
-
-    // ==================== HELPERS FINALE ====================
 
     private Map<String, Integer> getHeroAllBonuses() {
         Map<String, Integer> allBonuses = new HashMap<>();
@@ -844,23 +1063,45 @@ public class CharacterSheetController {
     }
 
     /**
-     * Actualizare EquipmentSlot class pentru multiple tipuri acceptate
+     * ✅ Calculează base crit chance fără echipament
      */
+    private double getBaseCritChance() {
+        double baseCritChance = 5.0; // GameConstants.BASE_CRIT_CHANCE
+        double dexBonus = hero.getDexterity() * 0.1; // GameConstants.CRIT_CHANCE_PER_DEX
+        return baseCritChance + dexBonus;
+    }
+
+    /**
+     * ✅ Calculează base hit chance fără echipament
+     */
+    private double getBaseHitChance() {
+        double baseHitChance = 75.0; // GameConstants.BASE_HIT_CHANCE
+        double dexBonus = hero.getDexterity() * 0.2; // GameConstants.HIT_CHANCE_PER_DEX
+        double levelBonus = hero.getNivel() * 0.5; // GameConstants.HIT_CHANCE_PER_LEVEL
+        return baseHitChance + dexBonus + levelBonus;
+    }
+
+    /**
+     * ✅ Calculează base dodge chance fără echipament
+     */
+    private double getBaseDodgeChance() {
+        double baseDodgeChance = 5.0; // GameConstants.BASE_DODGE_CHANCE
+        double dexBonus = hero.getDexterity() * 0.15; // GameConstants.DODGE_CHANCE_PER_DEX
+        return baseDodgeChance + dexBonus;
+    }
+
+
     private static class EquipmentSlot {
         private String slotId;
-        private java.util.Set<ObiectEchipament.TipEchipament> acceptedTypes;
         private ObiectEchipament currentItem;
         private VBox slotBox;
         private Label itemLabel;
 
-        public EquipmentSlot(String slotId, java.util.Set<ObiectEchipament.TipEchipament> acceptedTypes) {
+        public EquipmentSlot(String slotId) {
             this.slotId = slotId;
-            this.acceptedTypes = acceptedTypes;
         }
 
-        // Getters & Setters
         public String getSlotId() { return slotId; }
-        public java.util.Set<ObiectEchipament.TipEchipament> getAcceptedTypes() { return acceptedTypes; }
         public ObiectEchipament getCurrentItem() { return currentItem; }
         public void setCurrentItem(ObiectEchipament currentItem) { this.currentItem = currentItem; }
         public VBox getSlotBox() { return slotBox; }

@@ -345,7 +345,42 @@ public class LootGenerator {
                 handedness = ObiectEchipament.WeaponHandedness.OFF_HAND_ONLY;
             }
 
-            // ... rest of armor cases stay the same ...
+            case ARMOR -> {
+                String[] armorData = RandomUtils.randomElement(ARMOR_TYPES);
+                itemName = generateArmorName(armorData, raritate);
+                bonuses = calculateDefensiveBonuses(raritate, 1.0);
+                weaponClass = "armor";
+            }
+            case HELMET -> {
+                String[] helmetData = RandomUtils.randomElement(HELMET_TYPES);
+                itemName = generateArmorName(helmetData, raritate);
+                bonuses = calculateDefensiveBonuses(raritate, 0.7);
+                weaponClass = "helmet";
+            }
+            case BOOTS -> {
+                String[] bootsData = RandomUtils.randomElement(BOOTS_TYPES);
+                itemName = generateArmorName(bootsData, raritate);
+                bonuses = calculateDefensiveBonuses(raritate, 0.6);
+                weaponClass = "boots";
+            }
+            case GLOVES -> {
+                String[] glovesData = RandomUtils.randomElement(GLOVES_TYPES);
+                itemName = generateArmorName(glovesData, raritate);
+                bonuses = calculateDefensiveBonuses(raritate, 0.6);
+                weaponClass = "gloves";
+            }
+            case RING -> {
+                String[] ringData = RandomUtils.randomElement(RING_TYPES);
+                itemName = generateAccessoryName(ringData, raritate);
+                bonuses = calculateAccessoryBonuses(raritate);
+                weaponClass = "ring";
+            }
+            case NECKLACE -> {
+                String[] necklaceData = RandomUtils.randomElement(NECKLACE_TYPES);
+                itemName = generateAccessoryName(necklaceData, raritate);
+                bonuses = calculateAccessoryBonuses(raritate);
+                weaponClass = "necklace";
+            }
 
             default -> {
                 itemName = "Unknown Item";
@@ -356,7 +391,7 @@ public class LootGenerator {
         int requiredLevel = Math.max(1, level + RandomUtils.randomInt(-2, 2));
         int pret = calculateItemPrice(requiredLevel, raritate);
 
-        // Folosește constructorul extins
+// ✅ Folosește constructorul extins cu noile proprietăți
         return new ObiectEchipament(
                 itemName,
                 requiredLevel,
@@ -367,9 +402,9 @@ public class LootGenerator {
                 bonuses.getOrDefault("intelligence", 0),
                 bonuses.getOrDefault("defense", 0),
                 pret,
-                handedness,
-                weaponClass,
-                isOffHandCompatible
+                handedness,      // ✅ Nou
+                weaponClass,     // ✅ Nou
+                isOffHandCompatible // ✅ Nou
         );
     }
 

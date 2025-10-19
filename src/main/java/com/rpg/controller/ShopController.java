@@ -1,6 +1,7 @@
 package com.rpg.controller;
 
 import com.rpg.model.characters.Erou;
+import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.ShopServiceFX;
 import com.rpg.service.ShopServiceFX.ShopCategory;
 import com.rpg.service.dto.PurchaseResult;
@@ -296,6 +297,9 @@ public class ShopController {
             displayItemDetails(item);
         });
     }
+
+
+
 
     /**
      * Gestionează achiziția

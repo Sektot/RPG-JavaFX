@@ -6,6 +6,8 @@ import com.rpg.model.items.EnchantScroll;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.dto.PurchaseResult;
 import com.rpg.service.dto.ShopItemDTO;
+import com.rpg.service.LootGenerator;
+
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,7 +21,15 @@ import java.util.Map;
  */
 public class ShopServiceFX {
 
-    private Map<String, ObiectEchipament> generatedSamples = new HashMap<>();
+    // Cache intern pentru sample-uri generate (id -> item)
+    private final Map<String, ObiectEchipament> generatedSamples = new HashMap<>();
+
+    // Contor restock - ca să schimbi seed-ul logic dacă vrei
+    private int restockCycle = 0;
+
+    // Iteme de bază cu stoc limitat (id -> stoc ramas)
+    private final Map<String, Integer> baseStock = new HashMap<>();
+
 
     // Categoriile de produse
     public enum ShopCategory {
@@ -41,6 +51,21 @@ public class ShopServiceFX {
         public String getDisplayName() {
             return displayName;
         }
+    }
+
+    public void forceRestock() {
+        // 1) golește cache-ul de sample-uri
+        generatedSamples.clear();
+
+        // 2) reinitializează stocul pentru itemele de bază
+        // poți personaliza aceste id-uri în funcție de ce generezi în getShopItems
+        baseStock.clear();
+        baseStock.put("potion_small", 5);
+        baseStock.put("potion_medium", 3);
+        baseStock.put("potion_large", 1);
+
+        // 3) bump un ciclu de restock (dacă vrei să alterezi RNG)
+        restockCycle++;
     }
 
     /**
@@ -165,6 +190,102 @@ public class ShopServiceFX {
 
         return items;
     }
+
+    /**
+     * ✅ METODĂ PRINCIPALĂ - returnează toate itemele disponibile în shop
+     */
+    public List<ShopItemDTO> getShopItems(int heroLevel) {
+        List<ShopItemDTO> allItems = new ArrayList<>();
+
+        // Adaugă toate categoriile
+        allItems.addAll(getHealingPotions());
+        allItems.addAll(getBuffPotions());
+        allItems.addAll(getEquipment(heroLevel));
+        allItems.addAll(getSpecialConsumables());
+        allItems.addAll(getPacks());
+
+        return allItems;
+    }
+
+
+    public ObiectEchipament createEquipmentFromShopItem(ShopItemDTO shopItem) {
+        if (shopItem == null) return null;
+
+        // 1) dacă avem sample în cache, întoarce o copie
+        ObiectEchipament cached = generatedSamples.get(shopItem.getId());
+        if (cached != null) {
+            return cached.createCopy();
+        }
+
+        // 2) dacă nu avem, încearcă să deduci itemul din ID (ex: weapon_one_12)
+        // Formaturi posibile (după cum ai folosit mai sus):
+        // weapon_one_{level}, weapon_two_{level}, armor_{level}, shield_{level}, offhand_weapon_{level}, offhand_magic_{level}
+        try {
+            String id = shopItem.getId();
+            String[] parts = id.split("_");
+            int level = extractLevelFromId(parts);
+
+            ObiectEchipament.TipEchipament tip = deduceTipFromId(parts);
+
+            if (tip != null) {
+                ObiectEchipament item = com.rpg.service.LootGenerator.generateItemByType(
+                        tip,
+                        level,
+                        deduceRarityFromDescription(shopItem.getDescription()) // încearcă să păstrezi raritatea
+                );
+
+                // Salvează sample-ul în cache pentru WYSIWYG pe viitor
+                generatedSamples.put(id, item);
+                return item.createCopy();
+            }
+
+        } catch (Exception ignored) {
+            // dacă nu reușim să deducem, fallback
+        }
+
+        // 3) fallback - generează ceva generic pe nivelul eroului
+        int guessedLevel = Math.max(1, heroLevelFallback());
+        ObiectEchipament item = com.rpg.service.LootGenerator.generateRandomItem(guessedLevel);
+        return item;
+    }
+
+    private int extractLevelFromId(String[] parts) {
+        // Caută un token numeric în id
+        for (int i = parts.length - 1; i >= 0; i--) {
+            try {
+                return Integer.parseInt(parts[i]);
+            } catch (NumberFormatException ignored) {}
+        }
+        return 1;
+    }
+
+    private ObiectEchipament.TipEchipament deduceTipFromId(String[] parts) {
+        String joined = String.join("_", parts).toLowerCase();
+        if (joined.contains("weapon_one")) return ObiectEchipament.TipEchipament.WEAPON_ONE_HANDED;
+        if (joined.contains("weapon_two")) return ObiectEchipament.TipEchipament.WEAPON_TWO_HANDED;
+        if (joined.contains("armor"))      return ObiectEchipament.TipEchipament.ARMOR;
+        if (joined.contains("shield"))     return ObiectEchipament.TipEchipament.SHIELD;
+        if (joined.contains("offhand_weapon")) return ObiectEchipament.TipEchipament.OFF_HAND_WEAPON;
+        if (joined.contains("offhand_magic"))  return ObiectEchipament.TipEchipament.OFF_HAND_MAGIC;
+        return null;
+    }
+
+    private ObiectEchipament.Raritate deduceRarityFromDescription(String desc) {
+        if (desc == null) return ObiectEchipament.Raritate.COMMON;
+        String d = desc.toLowerCase();
+        if (d.contains("legendary")) return ObiectEchipament.Raritate.LEGENDARY;
+        if (d.contains("epic"))      return ObiectEchipament.Raritate.EPIC;
+        if (d.contains("rare"))      return ObiectEchipament.Raritate.RARE;
+        if (d.contains("uncommon"))  return ObiectEchipament.Raritate.UNCOMMON;
+        return ObiectEchipament.Raritate.COMMON;
+    }
+
+    private int heroLevelFallback() {
+        // Dacă nu ai acces direct la erou aici, treci nivelul drept parametru când creezi ShopServiceFX
+        // sau păstrează-l într-un field la creare.
+        return 5;
+    }
+
 
     /**
      * Echipament (generat dinamic pe nivel) - COMPLETĂ CU NOUL SISTEM
@@ -543,6 +664,8 @@ public class ShopServiceFX {
             }
             return true;
         }
+
+
 //// ✅ Echipament generat via LootGenerator (unificat cu loot-ul)
 //        if (itemId.startsWith("weapon_") || itemId.startsWith("armor_")) {
 //            boolean isWeapon = itemId.startsWith("weapon_");
@@ -601,207 +724,6 @@ public class ShopServiceFX {
         return false;
     }
 
-//    /**
-//     * ✨ GENERATOR INTEGRAT cu logica din ObiectEchipament
-//     */
-//    private ObiectEchipament generateShopEquipment(String itemId, int heroLevel) {
-//        int itemLevel = extractLevelFromId(itemId, heroLevel);
-//        boolean isWeapon = itemId.startsWith("weapon_");
-//
-//        // 1) Alege raritatea (folosește enumul existent din model)
-//        ObiectEchipament.Raritate raritate = rollRarityForLevel(itemLevel);
-//
-//        // 2) Tipul
-//        ObiectEchipament.TipEchipament tip = isWeapon
-//                ? ObiectEchipament.TipEchipament.WEAPON
-//                : ObiectEchipament.TipEchipament.ARMOR;
-//
-//        // 3) Nume (helper în shop, dar modelul gestionează +X automat)
-//        String baseName = isWeapon ? generateWeaponName(raritate) : generateArmorName(raritate);
-//        String fullName = baseName + " Lv." + itemLevel;
-//
-//        // 4) Bonusuri MINIMALE pentru constructorul complet
-//        int str = 0, dex = 0, intl = 0, def = 0;
-//
-//        // Distribuit random pe stat-uri bazate pe tip și raritate
-//        int statBudget = (int)((itemLevel + 2) * raritate.getMultiplier());
-//        java.util.Random r = new java.util.Random();
-//
-//        if (isWeapon) {
-//            // Arme -> focus pe stats ofensive
-//            str = statBudget / 2 + r.nextInt(Math.max(1, statBudget / 4));
-//            dex = statBudget / 4 + r.nextInt(Math.max(1, statBudget / 6));
-//            intl = r.nextInt(Math.max(1, statBudget / 6));
-//        } else {
-//            // Armuri -> focus pe defense și health
-//            def = statBudget / 2 + r.nextInt(Math.max(1, statBudget / 4));
-//            str = statBudget / 6 + r.nextInt(Math.max(1, statBudget / 8));
-//            dex = r.nextInt(Math.max(1, statBudget / 8));
-//            intl = r.nextInt(Math.max(1, statBudget / 8));
-//        }
-//
-//        // 5) Preț bazat pe nivel și multiplierul din raritate
-//        int basePrice = 100 + itemLevel * 15;
-//        int price = (int)(basePrice * raritate.getMultiplier());
-//
-//        // 6) Construiește obiectul folosind constructorul COMPLET din model
-//        ObiectEchipament item = new ObiectEchipament(
-//                fullName, itemLevel, raritate, tip,
-//                str, dex, intl, def, price
-//        );
-//
-//        // 7) Bonusuri SPECIALE prin setBonuses (folosește API-ul din model)
-//        java.util.Map<String, Integer> extraBonuses = generateSpecialBonuses(isWeapon, itemLevel, raritate);
-//
-//        // Combină cu bonusurile din constructor
-//        java.util.Map<String, Integer> allBonuses = item.getBonuses();
-//        allBonuses.putAll(extraBonuses);
-//        item.setBonuses(allBonuses);
-//
-//        // 8) Enhancement random pentru rarități înalte (folosește API-ul din model)
-//        if (raritate.ordinal() >= ObiectEchipament.Raritate.RARE.ordinal()) {
-//            int enhanceChance = switch (raritate) {
-//                case RARE -> 20;      // 20% șansă +1
-//                case EPIC -> 40;      // 40% șansă +1-2
-//                case LEGENDARY -> 60; // 60% șansă +1-3
-//                default -> 0;
-//            };
-//
-//            if (r.nextInt(100) < enhanceChance) {
-//                int enhanceLevel = 1 + r.nextInt(Math.min(3, raritate.ordinal()));
-//                item.setEnhancementLevel(enhanceLevel); // Modelul gestionează automat bonusurile
-//                System.out.printf("✨ Enhanced to +%d: %s\n", enhanceLevel, item.getNume());
-//            }
-//        }
-//
-//        System.out.printf("🛍️ Generated %s: %s (%s) - %d gold\n",
-//                isWeapon ? "WEAPON" : "ARMOR",
-//                item.getNume(), raritate.getDisplayName(), item.getPret());
-//
-//        return item;
-//    }
-//
-//    /**
-//     * 🎲 Generează raritatea random bazată pe nivel
-//     */
-//    private ObiectEchipament.Raritate rollRarityForLevel(int level) {
-//        java.util.Random r = new java.util.Random();
-//        double roll = r.nextDouble() * 100;
-//        double bonus = Math.min(level * 1.5, 25); // max +25% la nivel înalt
-//
-//        if (roll < (5 + bonus)) return ObiectEchipament.Raritate.LEGENDARY; // 5-30%
-//        if (roll < (15 + bonus/2)) return ObiectEchipament.Raritate.EPIC;   // 10-25%
-//        if (roll < 35) return ObiectEchipament.Raritate.RARE;               // 20%
-//        if (roll < 65) return ObiectEchipament.Raritate.UNCOMMON;           // 30%
-//        return ObiectEchipament.Raritate.COMMON;                            // 35%
-//    }
-//
-//    /**
-//     * ⚡ Generează bonusuri speciale bazate pe tip și raritate
-//     */
-//    private java.util.Map<String, Integer> generateSpecialBonuses(boolean isWeapon, int level, ObiectEchipament.Raritate raritate) {
-//        java.util.Map<String, Integer> bonuses = new java.util.HashMap<>();
-//        java.util.Random r = new java.util.Random();
-//
-//        double rarityMult = raritate.getMultiplier();
-//
-//        if (isWeapon) {
-//            // 🗡️ BONUSURI ARMĂ
-//            int damage = (int)((8 + level * 2) * rarityMult);
-//            bonuses.put("Damage", damage);
-//
-//            // Bonusuri condiționale pe raritate
-//            if (raritate.ordinal() >= ObiectEchipament.Raritate.UNCOMMON.ordinal()) {
-//                bonuses.put("crit_chance", 2 + raritate.ordinal() * 2);
-//            }
-//
-//            if (raritate.ordinal() >= ObiectEchipament.Raritate.RARE.ordinal()) {
-//                bonuses.put("hit_chance", 5 + raritate.ordinal() * 3);
-//            }
-//
-//            if (raritate == ObiectEchipament.Raritate.LEGENDARY) {
-//                // Legendare au bonus special random
-//                String[] specialBonuses = {"lifesteal", "mana_steal", "elemental_damage"};
-//                String special = specialBonuses[r.nextInt(specialBonuses.length)];
-//                bonuses.put(special, 3 + level / 4);
-//            }
-//
-//        } else {
-//            // 🛡️ BONUSURI ARMURĂ
-//            int health = (int)((15 + level * 4) * rarityMult);
-//            bonuses.put("health", health);
-//
-//            if (raritate.ordinal() >= ObiectEchipament.Raritate.UNCOMMON.ordinal()) {
-//                bonuses.put("dodge_chance", 1 + raritate.ordinal() * 2);
-//            }
-//
-//            if (raritate.ordinal() >= ObiectEchipament.Raritate.RARE.ordinal()) {
-//                bonuses.put("damage_reduction", 2 + raritate.ordinal() * 2);
-//            }
-//
-//            if (raritate == ObiectEchipament.Raritate.LEGENDARY) {
-//                // Legendare au rezistențe elementale
-//                bonuses.put("fire_resistance", 10 + level);
-//                bonuses.put("ice_resistance", 10 + level);
-//            }
-//        }
-//
-//        // 💰 Bonus gold find pentru rarități înalte
-//        if (raritate.ordinal() >= ObiectEchipament.Raritate.EPIC.ordinal()) {
-//            bonuses.put("gold_find", 5 + raritate.ordinal() * 5);
-//        }
-//
-//        return bonuses;
-//    }
-//
-//    /**
-//     * 🗡️ Generează nume pentru arme bazate pe raritate
-//     */
-//    private String generateWeaponName(ObiectEchipament.Raritate raritate) {
-//        String[] prefixes = switch (raritate) {
-//            case LEGENDARY -> new String[]{"Apocalipsa", "Ragnarok", "Excalibur", "Mjolnir", "Durendal"};
-//            case EPIC -> new String[]{"Flacăra", "Furia", "Ghilotina", "Răzbunarea", "Tempesta"};
-//            case RARE -> new String[]{"Sabia", "Toporul", "Lancea", "Pumnalul", "Arcul"};
-//            case UNCOMMON -> new String[]{"Lama", "Spada", "Ciocanul", "Băţul", "Suliţa"};
-//            case COMMON -> new String[]{"Sabia", "Ciomagul", "Toporul", "Cuţitul", "Băţul"};
-//        };
-//
-//        String[] suffixes = switch (raritate) {
-//            case LEGENDARY -> new String[]{"Eternității", "Zeilor", "Infinitului", "Dragonului de Aur"};
-//            case EPIC -> new String[]{"Dragonului", "Phoenixului", "Titanului", "Cavalerului Negru"};
-//            case RARE -> new String[]{"Războinicului", "Vânătorului", "Lordului", "Campionului"};
-//            case UNCOMMON -> new String[]{"Vitejiei", "Puterii", "Rapidității", "Preciziei"};
-//            case COMMON -> new String[]{"Începătorului", "Soldatului", "Novicului", "Orășenului"};
-//        };
-//
-//        java.util.Random r = new java.util.Random();
-//        return prefixes[r.nextInt(prefixes.length)] + " " + suffixes[r.nextInt(suffixes.length)];
-//    }
-//
-//    /**
-//     * 🛡️ Generează nume pentru armuri bazate pe raritate
-//     */
-//    private String generateArmorName(ObiectEchipament.Raritate raritate) {
-//        String[] prefixes = switch (raritate) {
-//            case LEGENDARY -> new String[]{"Armura", "Platoșa", "Vestmântul", "Mantaua", "Coiful"};
-//            case EPIC -> new String[]{"Armura", "Platoșa", "Vestmântul", "Haina", "Tuneca"};
-//            case RARE -> new String[]{"Armura", "Vestmântul", "Platoșa", "Haina", "Tuneca"};
-//            case UNCOMMON -> new String[]{"Armura", "Haina", "Vestmântul", "Tuneca", "Cămașa"};
-//            case COMMON -> new String[]{"Haina", "Vestmântul", "Cămașa", "Tuneca", "Bluza"};
-//        };
-//
-//        String[] suffixes = switch (raritate) {
-//            case LEGENDARY -> new String[]{"Nemuritorului", "Zeului", "Eternității", "Dragonului Sacru"};
-//            case EPIC -> new String[]{"Dragonului", "Phoenixului", "Titanului", "Gardianului"};
-//            case RARE -> new String[]{"Războinicului", "Protectorului", "Apărătorului", "Lordului"};
-//            case UNCOMMON -> new String[]{"Apărării", "Rezistentei", "Forței", "Curajului"};
-//            case COMMON -> new String[]{"Începătorului", "Soldatului", "Novicului", "Orășenului"};
-//        };
-//
-//        java.util.Random r = new java.util.Random();
-//        return prefixes[r.nextInt(prefixes.length)] + " " + suffixes[r.nextInt(suffixes.length)];
-//    }
-
     // 🔢 Extract nivel din itemId cu fallback la nivelul eroului
     private int extractLevelFromId(String itemId, int fallback) {
         try {
@@ -811,37 +733,58 @@ public class ShopServiceFX {
         return fallback;
     }
 
-    // 🎲 Raritate pentru shop corelată cu nivelul (reutilizează schema loot-ului)
-    private ObiectEchipament.Raritate pickShopRarityForLevel(int level) {
-        // Opțional: folosește aceleași praguri ca LootGenerator.determineRarity,
-        // dar “puțin mai generoase” pentru shop (simți că plătești pentru ceva mai bun)
-        double roll = com.rpg.utils.RandomUtils.randomDouble();
+//    // 🎲 Raritate pentru shop corelată cu nivelul (reutilizează schema loot-ului)
+//    private ObiectEchipament.Raritate pickShopRarityForLevel(int level) {
+//        // Opțional: folosește aceleași praguri ca LootGenerator.determineRarity,
+//        // dar “puțin mai generoase” pentru shop (simți că plătești pentru ceva mai bun)
+//        double roll = com.rpg.utils.RandomUtils.randomDouble();
+//
+//        if (level >= 20 && roll < 0.10) return ObiectEchipament.Raritate.LEGENDARY; // +5%
+//        if (level >= 15 && roll < 0.20) return ObiectEchipament.Raritate.EPIC;      // +5%
+//        if (level >= 10 && roll < 0.30) return ObiectEchipament.Raritate.RARE;      // +5%
+//        if (level >= 5 && roll < 0.50)  return ObiectEchipament.Raritate.UNCOMMON;  // +10%
+//        return ObiectEchipament.Raritate.COMMON;
+//    }
+//
+//    // 🏷️ “Shop flavor”: adaugă Lv. în nume și ajustează prețul ușor în sus
+//    private ObiectEchipament applyShopFlavor(ObiectEchipament base) {
+//        // Copie sigură (are createCopy() în model)
+//        ObiectEchipament item = base.createCopy();
+//
+//        // 1) Nume: adaugă “Lv.X” dacă lipsește
+//        if (!item.getNume().contains("Lv.")) {
+//            item.setNume(item.getNume() + " Lv." + item.getNivelNecesar());
+//        }
+//
+//        // 2) Preț: mic mark-up pentru cumpărare (ex: +15%)
+//        int adjusted = (int) Math.max(1, Math.round(item.getPret() * 1.15));
+//        item.setPret(adjusted);
+//
+//        // Enhancement/enchant rămân exact cum le-a decis generatorul
+//        return item;
+//    }
 
-        if (level >= 20 && roll < 0.10) return ObiectEchipament.Raritate.LEGENDARY; // +5%
-        if (level >= 15 && roll < 0.20) return ObiectEchipament.Raritate.EPIC;      // +5%
-        if (level >= 10 && roll < 0.30) return ObiectEchipament.Raritate.RARE;      // +5%
-        if (level >= 5 && roll < 0.50)  return ObiectEchipament.Raritate.UNCOMMON;  // +10%
+    /**
+     * Helper pentru alegerea rarității în shop
+     */
+    private ObiectEchipament.Raritate pickShopRarityForLevel(int heroLevel) {
+        // Shop-ul vinde iteme ușor mai bune decât loot-ul normal
+        if (heroLevel >= 15) return ObiectEchipament.Raritate.RARE;
+        if (heroLevel >= 10) return ObiectEchipament.Raritate.UNCOMMON;
+        if (heroLevel >= 5) return ObiectEchipament.Raritate.UNCOMMON;
         return ObiectEchipament.Raritate.COMMON;
     }
 
-    // 🏷️ “Shop flavor”: adaugă Lv. în nume și ajustează prețul ușor în sus
-    private ObiectEchipament applyShopFlavor(ObiectEchipament base) {
-        // Copie sigură (are createCopy() în model)
-        ObiectEchipament item = base.createCopy();
+    /**
+     * Aplică "shop flavor" - prețuri mai bune și nume fancy
+     */
+    private ObiectEchipament applyShopFlavor(ObiectEchipament item) {
+        // Reduce prețul cu 10% pentru shop
+        int newPrice = (int)(item.getPret() * 0.9);
+        item.setPret(Math.max(1, newPrice));
 
-        // 1) Nume: adaugă “Lv.X” dacă lipsește
-        if (!item.getNume().contains("Lv.")) {
-            item.setNume(item.getNume() + " Lv." + item.getNivelNecesar());
-        }
-
-        // 2) Preț: mic mark-up pentru cumpărare (ex: +15%)
-        int adjusted = (int) Math.max(1, Math.round(item.getPret() * 1.15));
-        item.setPret(adjusted);
-
-        // Enhancement/enchant rămân exact cum le-a decis generatorul
         return item;
     }
-
 
 
     /**

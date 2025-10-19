@@ -546,21 +546,22 @@ public boolean useManaPotion() {
         double baseHitChance = GameConstants.BASE_HIT_CHANCE;
         double dexBonus = getDexterityTotal() * GameConstants.HIT_CHANCE_PER_DEX;
         double levelBonus = nivel * GameConstants.HIT_CHANCE_PER_LEVEL;
-        // mai sus calculeaa pe baza la constante si staturi
-        // si da return la un maxim de 95%
-        return Math.min(95.0, baseHitChance + dexBonus + levelBonus);
+        double equipmentBonus = getEquipmentBonus("hit_chance"); // ✅ ADAUGĂ echipament
+        return Math.min(95.0, baseHitChance + dexBonus + levelBonus + equipmentBonus);
     }
 
     public double getCritChanceTotal() {
         double baseCritChance = GameConstants.BASE_CRIT_CHANCE;
         double dexBonus = getDexterityTotal() * GameConstants.CRIT_CHANCE_PER_DEX;
-        return Math.min(50.0, baseCritChance + dexBonus);
+        double equipmentBonus = getEquipmentBonus("crit_chance"); // ✅ ADAUGĂ echipament
+        return Math.min(50.0, baseCritChance + dexBonus + equipmentBonus);
     }
 
     public double getDodgeChanceTotal() {
         double baseDodgeChance = GameConstants.BASE_DODGE_CHANCE;
         double dexBonus = getDexterityTotal() * GameConstants.DODGE_CHANCE_PER_DEX;
-        return Math.min(75.0, baseDodgeChance + dexBonus);
+        double equipmentBonus = getEquipmentBonus("dodge_chance"); // ✅ ADAUGĂ echipament
+        return Math.min(75.0, baseDodgeChance + dexBonus + equipmentBonus);
     }
 
     public int getDefenseTotal() {

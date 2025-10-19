@@ -98,12 +98,15 @@ public class TownMenuController {
         Button dungeonBtn = createMenuButton("⚔️ Gara de Nord (Dungeon)", "#e74c3c");
         dungeonBtn.setOnAction(e -> handleDungeon());
 
-        // 🪙 SHOP
-        Button shopBtn = createMenuButton("🪙 Magazin", "#27ae60");
+        // 🛍️ ADVANCED SHOP
+        Button shopBtn = createMenuButton("🛍️ Advanced Shop", "#f39c12");
         shopBtn.setOnAction(e -> {
-            ShopController shopController = new ShopController(stage, hero);
+            ShopAdvancedController shopController = new ShopAdvancedController(stage, hero);
             stage.setScene(shopController.createScene());
         });
+
+
+
 
         // 🔨 SMITH & TRAINER
         Button smithBtn = createMenuButton("🔨 Fierăria & Training", "#e67e22");
