@@ -14,7 +14,7 @@ import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
 /**
- * SmithControllerFX - Controller pentru Training și Enhancement
+ * SmithControllerFX - Controller pentru Enhancement
  */
 public class SmithControllerFX {
 
@@ -23,8 +23,9 @@ public class SmithControllerFX {
     private TrainerSmithServiceFX smithService;
 
     private Label goldLabel;
-    private Label shardsLabel;
-    private Label statPointsLabel;
+    private Label scrapLabel;
+
+    private int selectedTabIndex = 0; // Track selected tab (0=Enhancement, 1=Disenchant)
 
     public SmithControllerFX(Stage stage, Erou hero) {
         this.stage = stage;
@@ -52,7 +53,7 @@ public class SmithControllerFX {
         header.setAlignment(Pos.CENTER);
         header.setStyle("-fx-background-color: #2d2d2d;");
 
-        Label title = new Label("🔨 FIERĂRIA & SALA DE ANTRENAMENT 🔨");
+        Label title = new Label("🔨 FIERĂRIA 🔨");
         title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #ff9800;");
 
         HBox resources = new HBox(30);
@@ -61,160 +62,47 @@ public class SmithControllerFX {
         goldLabel = new Label("💰 Gold: " + hero.getGold());
         goldLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #ffd54f;");
 
-        shardsLabel = new Label("🔮 Shards: " + hero.getShards());
-        shardsLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #9c27b0;");
+        scrapLabel = new Label("🔧 Scrap: " + hero.getScrap());
+        scrapLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #9c27b0;");
 
-        TrainingInfoDTO trainingInfo = smithService.getTrainingInfo(hero);
-        statPointsLabel = new Label("⭐ Stat Points: " + trainingInfo.getAvailableStatPoints());
-        statPointsLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #4caf50;");
-
-        resources.getChildren().addAll(goldLabel, shardsLabel, statPointsLabel);
+        resources.getChildren().addAll(goldLabel, scrapLabel);
 
         header.getChildren().addAll(title, resources);
         return header;
     }
 
     /**
-     * Conținut cu tab-uri
+     * Conținut principal - Enhancement și Disenchant tabs
      */
-    private TabPane createMainContent() {
+    private VBox createMainContent() {
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(10));
+
         TabPane tabPane = new TabPane();
-        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        tabPane.setStyle("-fx-background-color: #2d2d2d;");
 
-        Tab trainingTab = new Tab("💪 Training Stats", createTrainingPanel());
         Tab enhancementTab = new Tab("✨ Enhancement", createEnhancementPanel());
+        enhancementTab.setClosable(false);
 
-        tabPane.getTabs().addAll(trainingTab, enhancementTab);
+        Tab disenchantTab = new Tab("🔮 Disenchant", createDisenchantPanel());
+        disenchantTab.setClosable(false);
 
-        return tabPane;
+        tabPane.getTabs().addAll(enhancementTab, disenchantTab);
+
+        // Restore previously selected tab
+        tabPane.getSelectionModel().select(selectedTabIndex);
+
+        // Track tab changes
+        tabPane.getSelectionModel().selectedIndexProperty().addListener((obs, oldVal, newVal) -> {
+            selectedTabIndex = newVal.intValue();
+        });
+
+        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        content.getChildren().add(tabPane);
+
+        return content;
     }
 
-    /**
-     * Panel training
-     */
-    private VBox createTrainingPanel() {
-        VBox panel = new VBox(20);
-        panel.setPadding(new Insets(30));
-        panel.setStyle("-fx-background-color: #2d2d2d;");
-
-        Label titleLabel = new Label("💪 ANTRENAMENT STATS");
-        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #ff9800;");
-
-        TrainingInfoDTO info = smithService.getTrainingInfo(hero);
-
-        // Stat Points Section
-        if (info.hasStatPoints()) {
-            VBox statPointsSection = createStatPointsSection(info);
-            panel.getChildren().add(statPointsSection);
-
-            Separator sep1 = new Separator();
-            sep1.setPadding(new Insets(10, 0, 10, 0));
-            panel.getChildren().add(sep1);
-        }
-
-        // Training Section (cu gold)
-        VBox trainingSection = createTrainingSection(info);
-        panel.getChildren().add(trainingSection);
-
-        ScrollPane scrollPane = new ScrollPane(panel);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setStyle("-fx-background: #2d2d2d; -fx-background-color: #2d2d2d;");
-
-        VBox wrapper = new VBox(titleLabel, scrollPane);
-        wrapper.setSpacing(15);
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-
-        return wrapper;
-    }
-
-    private VBox createStatPointsSection(TrainingInfoDTO info) {
-        VBox section = new VBox(15);
-        section.setAlignment(Pos.CENTER);
-
-        Label sectionTitle = new Label("⭐ ALOCĂ STAT POINTS (GRATUIT)");
-        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #4caf50;");
-
-        Label pointsLabel = new Label("Puncte disponibile: " + info.getAvailableStatPoints());
-        pointsLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: white;");
-
-        HBox statsBox = new HBox(15);
-        statsBox.setAlignment(Pos.CENTER);
-
-        for (StatType statType : StatType.values()) {
-            statsBox.getChildren().add(createStatCard(statType, info, true));
-        }
-
-        section.getChildren().addAll(sectionTitle, pointsLabel, statsBox);
-        return section;
-    }
-
-    private VBox createTrainingSection(TrainingInfoDTO info) {
-        VBox section = new VBox(15);
-        section.setAlignment(Pos.CENTER);
-
-        Label sectionTitle = new Label("💰 ANTRENAMENT CU GOLD");
-        sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #ff9800;");
-
-        Label costLabel = new Label("Cost: " + info.getTrainingCost() + " gold per nivel");
-        costLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #ffd54f;");
-
-        HBox statsBox = new HBox(15);
-        statsBox.setAlignment(Pos.CENTER);
-
-        for (StatType statType : StatType.values()) {
-            statsBox.getChildren().add(createStatCard(statType, info, false));
-        }
-
-        section.getChildren().addAll(sectionTitle, costLabel, statsBox);
-        return section;
-    }
-
-    private VBox createStatCard(StatType statType, TrainingInfoDTO info, boolean isFree) {
-        VBox card = new VBox(10);
-        card.setPadding(new Insets(15));
-        card.setAlignment(Pos.CENTER);
-        card.setStyle(
-                "-fx-background-color: #3d3d3d; " +
-                        "-fx-background-radius: 10; " +
-                        "-fx-border-color: " + (isFree ? "#4caf50" : "#ff9800") + "; " +
-                        "-fx-border-width: 2; " +
-                        "-fx-border-radius: 10;"
-        );
-        card.setPrefWidth(250);
-
-        Label nameLabel = new Label(statType.getDisplayName());
-        nameLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: white;");
-
-        int currentValue = switch (statType) {
-            case STRENGTH -> info.getCurrentStrength();
-            case DEXTERITY -> info.getCurrentDexterity();
-            case INTELLIGENCE -> info.getCurrentIntelligence();
-        };
-
-        Label valueLabel = new Label("Valoare: " + currentValue);
-        valueLabel.setStyle("-fx-font-size: 18px; -fx-text-fill: #4caf50; -fx-font-weight: bold;");
-
-        Label descLabel = new Label(statType.getDescription());
-        descLabel.setWrapText(true);
-        descLabel.setMaxWidth(220);
-        descLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #bdbdbd;");
-
-        Button upgradeButton;
-        if (isFree) {
-            upgradeButton = new Button("⭐ ALOCĂ +1");
-            upgradeButton.setDisable(!info.hasStatPoints());
-            styleButton(upgradeButton, "#4caf50");
-            upgradeButton.setOnAction(e -> handleAllocateStatPoint(statType));
-        } else {
-            upgradeButton = new Button("💰 ANTRENEAZĂ +1");
-            upgradeButton.setDisable(!info.canAffordTraining());
-            styleButton(upgradeButton, "#ff9800");
-            upgradeButton.setOnAction(e -> handleTrainStat(statType));
-        }
-
-        card.getChildren().addAll(nameLabel, valueLabel, descLabel, upgradeButton);
-        return card;
-    }
 
     /**
      * Panel enhancement
@@ -230,7 +118,7 @@ public class SmithControllerFX {
         SmithInfoDTO smithInfo = smithService.getSmithInfo(hero);
 
         Label infoLabel = new Label(
-                "🔮 Shards: " + smithInfo.getAvailableShards() + " | " +
+                "🔧 Scrap: " + smithInfo.getAvailableShards() + " | " +
                         "📜 Scrolls: " + smithInfo.getEnchantScrollCount() + " | " +
                         "⚔️ Iteme: " + smithInfo.getEnhanceableItemsCount()
         );
@@ -279,7 +167,7 @@ public class SmithControllerFX {
         Label bonusesLabel = new Label(bonusesText.toString());
         bonusesLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #4caf50;");
 
-        Label costLabel = new Label("💎 Cost: " + itemDTO.getEnhancementCost() + " shards");
+        Label costLabel = new Label("🔧 Cost: " + itemDTO.getEnhancementCost() + " scrap");
         costLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #9c27b0;");
 
         if (itemDTO.getMaxAffordableLevels() > 1) {
@@ -318,6 +206,114 @@ public class SmithControllerFX {
     }
 
     /**
+     * Panel disenchant - dezmembrare echipament pentru shards
+     */
+    private VBox createDisenchantPanel() {
+        VBox panel = new VBox(15);
+        panel.setPadding(new Insets(20));
+        panel.setStyle("-fx-background-color: #2d2d2d;");
+
+        Label titleLabel = new Label("🔮 DISENCHANT ECHIPAMENT");
+        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #9c27b0;");
+
+        Label infoLabel = new Label(
+                "Descompune echipamentul neechipat pentru a obține scrap!\n" +
+                "Valorile scrap-ului depind de raritate, nivel și bonusuri."
+        );
+        infoLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #b0b0b0;");
+        infoLabel.setWrapText(true);
+
+        ListView<ObiectEchipament> itemsListView = new ListView<>();
+        itemsListView.setStyle("-fx-font-size: 14px;");
+
+        // Doar obiecte neechipate
+        itemsListView.getItems().addAll(
+            hero.getInventar().stream()
+                .filter(item -> !item.isEquipped())
+                .toList()
+        );
+        VBox.setVgrow(itemsListView, Priority.ALWAYS);
+
+        if (itemsListView.getItems().isEmpty()) {
+            Label noItemsLabel = new Label("📦 Nu ai obiecte neechipate care pot fi disenchanted!");
+            noItemsLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #ff9800;");
+            panel.getChildren().addAll(titleLabel, infoLabel, noItemsLabel);
+            return panel;
+        }
+
+        itemsListView.setCellFactory(lv -> new ListCell<ObiectEchipament>() {
+            @Override
+            protected void updateItem(ObiectEchipament item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                } else {
+                    setGraphic(createDisenchantItemCard(item));
+                }
+            }
+        });
+
+        // Disenchant ALL button
+        Button disenchantAllButton = new Button("💎 DISENCHANT TOATE");
+        disenchantAllButton.setStyle(
+                "-fx-font-size: 14px; " +
+                "-fx-font-weight: bold; " +
+                "-fx-background-color: #ff5722; " +
+                "-fx-text-fill: white; " +
+                "-fx-padding: 10px 20px; " +
+                "-fx-background-radius: 8;"
+        );
+        disenchantAllButton.setOnAction(e -> handleDisenchantAll(itemsListView.getItems()));
+
+        panel.getChildren().addAll(titleLabel, infoLabel, itemsListView, disenchantAllButton);
+        return panel;
+    }
+
+    private HBox createDisenchantItemCard(ObiectEchipament item) {
+        HBox card = new HBox(15);
+        card.setPadding(new Insets(10));
+        card.setStyle(
+                "-fx-background-color: #3d3d3d; " +
+                "-fx-background-radius: 8;"
+        );
+
+        VBox infoBox = new VBox(5);
+
+        String rarityIcon = getRarityIcon(item.getRaritate());
+        Label nameLabel = new Label(rarityIcon + " " + item.getNume());
+        nameLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: " +
+                          getRarityColor(item.getRaritate()) + ";");
+
+        Label rarityLabel = new Label("Raritate: " + item.getRaritate().getDisplayName() +
+                                     " | Nivel: " + item.getNivelNecesar());
+        rarityLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #b0b0b0;");
+
+        int scrapValue = calculateDisenchantValue(item);
+        Label scrapValueLabel = new Label("🔧 Primești: " + scrapValue + " scrap");
+        scrapValueLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #9c27b0;");
+
+        infoBox.getChildren().addAll(nameLabel, rarityLabel, scrapValueLabel);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Button disenchantButton = new Button("💥 Disenchant");
+        disenchantButton.setStyle(
+                "-fx-font-size: 12px; " +
+                "-fx-background-color: #e91e63; " +
+                "-fx-text-fill: white; " +
+                "-fx-padding: 8px 15px; " +
+                "-fx-background-radius: 5; " +
+                "-fx-cursor: hand;"
+        );
+        disenchantButton.setOnAction(e -> handleDisenchant(item, scrapValue));
+
+        card.getChildren().addAll(infoBox, spacer, disenchantButton);
+        return card;
+    }
+
+    /**
      * Footer
      */
     private HBox createFooter() {
@@ -338,37 +334,6 @@ public class SmithControllerFX {
     }
 
     // ==================== HANDLERS ====================
-
-    private void handleAllocateStatPoint(StatType statType) {
-        AllocationResultDTO result = smithService.allocateStatPoint(hero, statType);
-
-        if (result.isSuccess()) {
-            DialogHelper.showSuccess("Stat Alocat!",
-                    result.getMessage() + "\nNoua valoare: " + result.getNewValue());
-            refreshScene();
-        } else {
-            DialogHelper.showError("Eroare", result.getMessage());
-        }
-    }
-
-    private void handleTrainStat(StatType statType) {
-        TrainingInfoDTO info = smithService.getTrainingInfo(hero);
-
-        if (DialogHelper.showConfirmation("Antrenament",
-                "Vrei să antrenezi " + statType.getDisplayName() + " pentru " +
-                        info.getTrainingCost() + " gold?")) {
-
-            TrainingResultDTO result = smithService.trainStat(hero, statType);
-
-            if (result.isSuccess()) {
-                DialogHelper.showSuccess("Antrenament Reușit!",
-                        result.getMessage() + "\nNoua valoare: " + result.getNewValue());
-                refreshScene();
-            } else {
-                DialogHelper.showError("Eroare", result.getMessage());
-            }
-        }
-    }
 
     private void handleEnhance(ObiectEchipament item, boolean maxEnhance) {
         EnhancementResultDTO result;
@@ -447,5 +412,128 @@ public class SmithControllerFX {
                         "-fx-background-radius: 5; " +
                         "-fx-cursor: hand;"
         );
+    }
+
+    // ==================== DISENCHANT HANDLERS ====================
+
+    private void handleDisenchant(ObiectEchipament item, int scrapValue) {
+        String message = String.format(
+                "⚠️ ATENȚIE: Această acțiune este IREVERSIBILĂ!\n\n" +
+                "Obiect: %s %s\n" +
+                "Raritate: %s | Nivel: %d\n\n" +
+                "🔧 Vei primi: %d scrap\n" +
+                "🔧 Total după: %d scrap\n\n" +
+                "Confirmi disenchanting?",
+                getRarityIcon(item.getRaritate()), item.getNume(),
+                item.getRaritate().getDisplayName(), item.getNivelNecesar(),
+                scrapValue, hero.getScrap() + scrapValue
+        );
+
+        if (DialogHelper.showConfirmation("Confirmare Disenchant", message)) {
+            // Remove item and give scrap
+            hero.removeFromInventar(item);
+            hero.adaugaScrap(scrapValue);
+
+            String successMsg = String.format(
+                    "✅ DISENCHANT REUȘIT!\n\n" +
+                    "🔧 Ai primit %d scrap din %s!\n" +
+                    "🔧 Total scrap: %d\n\n" +
+                    "✨ Energia magică a obiectului a fost eliberată!",
+                    scrapValue, item.getNume(), hero.getScrap()
+            );
+
+            DialogHelper.showSuccess("Disenchant Complet", successMsg);
+            refreshScene();
+        }
+    }
+
+    private void handleDisenchantAll(java.util.List<ObiectEchipament> items) {
+        if (items.isEmpty()) {
+            DialogHelper.showError("Eroare", "Nu ai obiecte de disenchanted!");
+            return;
+        }
+
+        int totalScrap = items.stream()
+                .mapToInt(this::calculateDisenchantValue)
+                .sum();
+
+        String message = String.format(
+                "⚠️ ATENȚIE: Această acțiune este IREVERSIBILĂ!\n" +
+                "⚠️ TOATE obiectele vor fi distruse permanent!\n\n" +
+                "📦 Vei disenchanta %d obiecte\n" +
+                "🔧 Total scrap: %d\n" +
+                "🔧 Scrap după disenchant: %d\n\n" +
+                "Confirmi disenchanting pentru TOATE obiectele?",
+                items.size(), totalScrap, hero.getScrap() + totalScrap
+        );
+
+        if (DialogHelper.showConfirmation("Confirmare Disenchant Masiv", message)) {
+            // Remove all items
+            for (ObiectEchipament item : items) {
+                hero.removeFromInventar(item);
+            }
+            hero.adaugaScrap(totalScrap);
+
+            String successMsg = String.format(
+                    "✅ DISENCHANT MASIV REUȘIT!\n\n" +
+                    "🔧 Ai primit %d scrap din %d obiecte!\n" +
+                    "🔧 Total scrap: %d\n\n" +
+                    "✨ O explozie de energie magică umple camera!\n" +
+                    "🌟 Acum poți folosi scrap-ul pentru upgrade echipament!",
+                    totalScrap, items.size(), hero.getScrap()
+            );
+
+            DialogHelper.showSuccess("Disenchant Complet", successMsg);
+            refreshScene();
+        }
+    }
+
+    // ==================== HELPER METHODS ====================
+
+    private int calculateDisenchantValue(ObiectEchipament item) {
+        // Formula pentru calcularea valorii în scraps
+        // Higher base values for better scrap returns
+        int baseScraps = switch (item.getRaritate()) {
+            case COMMON -> 5;
+            case UNCOMMON -> 15;
+            case RARE -> 40;
+            case EPIC -> 100;
+            case LEGENDARY -> 250;
+        };
+
+        // Bonus bazat pe nivel - more generous
+        int levelBonus = item.getNivelNecesar() * 2; // +2 scraps per level
+
+        // Bonus bazat pe numărul de bonusuri
+        int bonusCount = item.getBonuses().size();
+        int bonusMultiplier = Math.max(1, bonusCount);
+
+        // Bonus pentru enhancement level - significant bonus for upgraded items
+        int enhancementBonus = item.getEnhancementLevel() * 10;
+
+        // Calculul final
+        int totalScraps = (baseScraps + levelBonus + enhancementBonus) * bonusMultiplier;
+
+        return Math.max(5, totalScraps); // Minim 5 scraps
+    }
+
+    private String getRarityIcon(ObiectEchipament.Raritate raritate) {
+        return switch (raritate) {
+            case COMMON -> "⚪";
+            case UNCOMMON -> "💚";
+            case RARE -> "💙";
+            case EPIC -> "💜";
+            case LEGENDARY -> "🌟";
+        };
+    }
+
+    private String getRarityColor(ObiectEchipament.Raritate raritate) {
+        return switch (raritate) {
+            case COMMON -> "#9e9e9e";
+            case UNCOMMON -> "#4caf50";
+            case RARE -> "#2196f3";
+            case EPIC -> "#9c27b0";
+            case LEGENDARY -> "#ff9800";
+        };
     }
 }

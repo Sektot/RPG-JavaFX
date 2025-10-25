@@ -39,14 +39,16 @@ public class MainMenuController {
         // Buttons
         Button newGameBtn = createStyledButton("🎮 Joc Nou");
         Button loadGameBtn = createStyledButton("📂 Încarcă Joc");
+        Button optionsBtn = createStyledButton("⚙️ Opțiuni");
         Button exitBtn = createStyledButton("🚪 Ieșire");
 
         // Event handlers
         newGameBtn.setOnAction(e -> startNewGame());
         loadGameBtn.setOnAction(e -> loadGame());
+        optionsBtn.setOnAction(e -> openOptions());
         exitBtn.setOnAction(e -> exitGame());
 
-        layout.getChildren().addAll(title, subtitle, newGameBtn, loadGameBtn, exitBtn);
+        layout.getChildren().addAll(title, subtitle, newGameBtn, loadGameBtn, optionsBtn, exitBtn);
 
         return new Scene(layout, 800, 600);
     }
@@ -104,6 +106,14 @@ public class MainMenuController {
         // Deschide controller-ul de load
         SaveLoadControllerFX saveLoadController = new SaveLoadControllerFX(stage);
         stage.setScene(saveLoadController.createScene());
+    }
+
+    private void openOptions() {
+        OptionsController optionsController = new OptionsController(stage, () -> {
+            // Return to main menu
+            stage.setScene(createScene());
+        });
+        stage.setScene(optionsController.createScene());
     }
 
     private void exitGame() {

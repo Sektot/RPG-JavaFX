@@ -1,6 +1,7 @@
 package com.rpg.controller;
 
 import com.rpg.model.characters.Erou;
+import com.rpg.model.items.Jewel;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.ShopServiceFX;
 import com.rpg.service.dto.ShopItemDTO;
@@ -116,7 +117,7 @@ public class ShopAdvancedController {
         playerFilterCombo.setOnAction(e -> loadPlayerInventory());
 
         playerInventoryList = new ListView<>();
-        playerInventoryList.setStyle("-fx-font-size: 14px; -fx-background-color: #2c3e50;");
+        playerInventoryList.setStyle("-fx-font-size: 14px; -fx-background-color: #2c3e50; -fx-text-fill: white;");
         VBox.setVgrow(playerInventoryList, Priority.ALWAYS);
 
         setupPlayerInventoryDragAndDrop();
@@ -145,7 +146,7 @@ public class ShopAdvancedController {
         vendorFilterCombo.setOnAction(e -> loadVendorInventory());
 
         vendorInventoryList = new ListView<>();
-        vendorInventoryList.setStyle("-fx-font-size: 14px; -fx-background-color: #2c3e50;");
+        vendorInventoryList.setStyle("-fx-font-size: 14px; -fx-background-color: #2c3e50; -fx-text-fill: white;");
         VBox.setVgrow(vendorInventoryList, Priority.ALWAYS);
 
         setupVendorInventoryDragAndDrop();
@@ -246,12 +247,21 @@ public class ShopAdvancedController {
                     if (empty || item == null) {
                         setText(null);
                         setTooltip(null);
+                        setStyle("");
                     } else {
                         setText(item.getDisplayName());
-                        if (item.getEquipment() != null) {
+
+                        // Set tooltips for jewels and equipment
+                        if (item.getJewel() != null) {
+                            Tooltip jewelTooltip = createJewelTooltip(item.getJewel());
+                            setTooltip(jewelTooltip);
+                            setStyle("-fx-text-fill: #c084fc; -fx-background-color: #2c3e50;"); // Purple for jewels
+                        } else if (item.getEquipment() != null) {
                             setTooltip(createItemTooltip(item.getEquipment()));
+                            setStyle("-fx-text-fill: white; -fx-background-color: #2c3e50;");
+                        } else {
+                            setStyle("-fx-text-fill: white; -fx-background-color: #2c3e50;");
                         }
-                        setStyle("-fx-text-fill: white;");
                     }
                 }
             };
@@ -287,17 +297,25 @@ public class ShopAdvancedController {
                     if (empty || item == null) {
                         setText(null);
                         setTooltip(null);
+                        setStyle("");
                     } else {
                         setText(item.getDisplayName());
-                        if (item.getEquipment() != null) {
+                        if (item.isJewel()) {
+                            // Create tooltip for jewels
+                            Tooltip jewelTooltip = new Tooltip(item.getJewelItem().getDescription());
+                            jewelTooltip.setStyle("-fx-font-size: 12px;");
+                            setTooltip(jewelTooltip);
+                        } else if (item.getEquipment() != null) {
                             setTooltip(createItemTooltip(item.getEquipment()));
                         }
 
-                        // Color coding pentru buyback items
+                        // Color coding pentru buyback items and jewels
                         if (item.isBuyback()) {
-                            setStyle("-fx-text-fill: #e67e22; -fx-font-style: italic;"); // Orange pentru buyback
+                            setStyle("-fx-text-fill: #e67e22; -fx-font-style: italic; -fx-background-color: #2c3e50;"); // Orange pentru buyback
+                        } else if (item.isJewel()) {
+                            setStyle("-fx-text-fill: #c084fc; -fx-background-color: #2c3e50;"); // Purple for jewels
                         } else {
-                            setStyle("-fx-text-fill: white;");
+                            setStyle("-fx-text-fill: white; -fx-background-color: #2c3e50;");
                         }
                     }
                 }
@@ -459,7 +477,12 @@ public class ShopAdvancedController {
 
         // Remove items from player, add to buyback
         for (TradeItem item : playerTradeItems) {
-            if (item.getEquipment() != null) {
+            if (item.getJewel() != null) {
+                // Handle jewel selling
+                hero.removeJewel(item.getJewel());
+                tradeDetails.append("📤 Sold: ").append(item.getDisplayName())
+                        .append(" (+").append(item.getPrice()).append("g)\n");
+            } else if (item.getEquipment() != null) {
                 hero.getInventar().removeItem(item.getEquipment());
 
                 // Add to buyback with markup
@@ -474,7 +497,14 @@ public class ShopAdvancedController {
 
         // Add items to player inventory
         for (TradeItem item : vendorTradeItems) {
-            if (item.getEquipment() != null) {
+            if (item.isJewel()) {
+                // Handle jewel purchase - add jewel directly without gold handling (gold handled below)
+                boolean success = shopService.addJewelToHero(hero, item.getJewelItem().getId());
+                if (success) {
+                    tradeDetails.append("📥 Bought: ").append(item.getDisplayName())
+                            .append(" (-").append(item.getPrice()).append("g)\n");
+                }
+            } else if (item.getEquipment() != null) {
                 hero.getInventar().addItem(item.getEquipment());
                 tradeDetails.append("📥 Bought: ").append(item.getDisplayName())
                         .append(" (-").append(item.getPrice()).append("g)\n");
@@ -516,9 +546,21 @@ public class ShopAdvancedController {
         ItemFilter filter = playerFilterCombo.getValue();
         List<TradeItem> items = new ArrayList<>();
 
+        // Add equipment items
         for (ObiectEchipament equipment : hero.getInventar().getItems()) {
             if (filter == ItemFilter.ALL || matchesFilter(equipment, filter)) {
                 items.add(new TradeItem(equipment, equipment.getPret(), false, false));
+            }
+        }
+
+        // Add jewels if filter is ALL or JEWELS
+        if (filter == ItemFilter.ALL || filter == ItemFilter.JEWELS) {
+            for (Jewel jewel : hero.getJewelInventory()) {
+                // Can't sell socketed jewels
+                if (!jewel.isSocketed()) {
+                    int sellPrice = jewel.getPrice() / 2; // 50% sell price
+                    items.add(new TradeItem(jewel, sellPrice));
+                }
             }
         }
 
@@ -531,7 +573,7 @@ public class ShopAdvancedController {
         List<TradeItem> items = new ArrayList<>();
 
         if (filter == VendorFilter.ALL || filter != VendorFilter.BUYBACK) {
-            // Add regular shop items
+            // Add regular shop items (equipment)
             List<ShopItemDTO> shopItems = shopService.getShopItems(hero.getNivel());
 
             for (ShopItemDTO shopItem : shopItems) {
@@ -541,6 +583,17 @@ public class ShopAdvancedController {
                         items.add(new TradeItem(equipment, shopItem.getPrice(), false, false));
                     }
                 }
+            }
+        }
+
+        // Add jewels if filter is ALL or JEWELS
+        if (filter == VendorFilter.ALL || filter == VendorFilter.JEWELS) {
+            List<ShopItemDTO> jewelItems = shopService.getItemsByCategory(
+                    ShopServiceFX.ShopCategory.JEWELS, hero.getNivel());
+
+            for (ShopItemDTO jewelItem : jewelItems) {
+                // Add jewel as a special TradeItem (we'll handle it differently)
+                items.add(new TradeItem(jewelItem, false));
             }
         }
 
@@ -584,6 +637,7 @@ public class ShopAdvancedController {
             case ARMOR -> equipment.isArmor();
             case ACCESSORIES -> equipment.isAccessory();
             case SHIELDS -> equipment.getTip() == ObiectEchipament.TipEchipament.SHIELD;
+            case JEWELS -> false; // Jewels are not equipment, handled separately in loadPlayerInventory
         };
     }
 
@@ -594,6 +648,7 @@ public class ShopAdvancedController {
             case ARMOR -> equipment.isArmor();
             case ACCESSORIES -> equipment.isAccessory();
             case SHIELDS -> equipment.getTip() == ObiectEchipament.TipEchipament.SHIELD;
+            case JEWELS -> false; // Jewels are not equipment, handled separately in loadVendorInventory
             case BUYBACK -> false; // Handled separately
         };
     }
@@ -627,6 +682,27 @@ public class ShopAdvancedController {
         return tooltip;
     }
 
+    private Tooltip createJewelTooltip(Jewel jewel) {
+        StringBuilder tooltipText = new StringBuilder();
+
+        tooltipText.append("💎 ").append(jewel.getName()).append("\n");
+        tooltipText.append("═══════════════════════════\n");
+        tooltipText.append("🎯 Type: ").append(jewel.getType().getDisplayName()).append("\n");
+        tooltipText.append("⭐ Rarity: ").append(jewel.getRarity().getDisplayName()).append("\n");
+        tooltipText.append("📊 Level: ").append(jewel.getRequiredLevel()).append("\n\n");
+
+        tooltipText.append("MODIFIERS:\n");
+        tooltipText.append(jewel.getModifiersDescription());
+
+        tooltipText.append("\n💰 Sell Price: ").append(jewel.getPrice() / 2).append(" gold");
+
+        Tooltip tooltip = new Tooltip(tooltipText.toString());
+        tooltip.setStyle("-fx-font-size: 12px; -fx-background-color: #2c3e50; -fx-text-fill: #c084fc;");
+        tooltip.setShowDuration(javafx.util.Duration.INDEFINITE);
+
+        return tooltip;
+    }
+
     private void forceRestock() {
         dungeonEntriesCount += 3; // Force restock
         buybackItems.removeIf(item ->
@@ -654,24 +730,57 @@ public class ShopAdvancedController {
 
     public static class TradeItem {
         private ObiectEchipament equipment;
+        private ShopItemDTO jewelItem; // For jewels from vendor
+        private Jewel jewel; // For jewels from player inventory
         private int price;
         private boolean isBuyback;
         private boolean isBasicItem;
 
+        // Constructor for equipment
         public TradeItem(ObiectEchipament equipment, int price, boolean isBuyback, boolean isBasicItem) {
             this.equipment = equipment;
+            this.jewelItem = null;
+            this.jewel = null;
             this.price = price;
             this.isBuyback = isBuyback;
             this.isBasicItem = isBasicItem;
         }
 
+        // Constructor for jewels from vendor (buying)
+        public TradeItem(ShopItemDTO jewelItem, boolean isBuyback) {
+            this.equipment = null;
+            this.jewelItem = jewelItem;
+            this.jewel = null;
+            this.price = jewelItem.getPrice();
+            this.isBuyback = isBuyback;
+            this.isBasicItem = false;
+        }
+
+        // Constructor for jewels from player (selling)
+        public TradeItem(Jewel jewel, int sellPrice) {
+            this.equipment = null;
+            this.jewelItem = null;
+            this.jewel = jewel;
+            this.price = sellPrice;
+            this.isBuyback = false;
+            this.isBasicItem = false;
+        }
+
         public String getDisplayName() {
             String prefix = isBuyback ? "🔄 " : "";
+            if (jewelItem != null) {
+                return prefix + jewelItem.getName() + " (" + price + "g)";
+            } else if (jewel != null) {
+                return prefix + jewel.getName() + " (" + price + "g)";
+            }
             return prefix + equipment.getNume() + " (" + price + "g)";
         }
 
         // Getters
         public ObiectEchipament getEquipment() { return equipment; }
+        public ShopItemDTO getJewelItem() { return jewelItem; }
+        public Jewel getJewel() { return jewel; }
+        public boolean isJewel() { return jewelItem != null || jewel != null; }
         public int getPrice() { return price; }
         public boolean isBuyback() { return isBuyback; }
         public boolean isBasicItem() { return isBasicItem; }
@@ -699,7 +808,8 @@ public class ShopAdvancedController {
         WEAPONS("Arme"),
         ARMOR("Armuri"),
         SHIELDS("Scuturi"),
-        ACCESSORIES("Accesorii");
+        ACCESSORIES("Accesorii"),
+        JEWELS("💎 Bijuterii");
 
         private final String displayName;
 
@@ -719,6 +829,7 @@ public class ShopAdvancedController {
         ARMOR("Armuri"),
         SHIELDS("Scuturi"),
         ACCESSORIES("Accesorii"),
+        JEWELS("💎 Bijuterii"),
         BUYBACK("Buyback");
 
         private final String displayName;

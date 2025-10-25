@@ -115,6 +115,9 @@ public class SaveLoadControllerFX {
         TabPane tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
+        // Initialize the main ListView first
+        savesListView = new ListView<>();
+
         Tab allTab = new Tab("Toate", createSavesList(saveLoadService.getAvailableSaves()));
         Tab manualTab = new Tab("Manuale", createSavesList(saveLoadService.getManualSaves()));
         Tab autoTab = new Tab("Auto-Save", createSavesList(saveLoadService.getAutoSaves()));
@@ -127,12 +130,12 @@ public class SaveLoadControllerFX {
     }
 
     private ListView<SaveFileDTO> createSavesList(List<SaveFileDTO> saves) {
-        savesListView = new ListView<>();
-        savesListView.getItems().addAll(saves);
-        savesListView.setStyle("-fx-font-size: 14px;");
+        ListView<SaveFileDTO> listView = new ListView<>();
+        listView.getItems().addAll(saves);
+        listView.setStyle("-fx-font-size: 14px; -fx-background-color: #1a1a2e;");
 
         // Custom cell factory pentru afișare frumoasă
-        savesListView.setCellFactory(lv -> new ListCell<SaveFileDTO>() {
+        listView.setCellFactory(lv -> new ListCell<SaveFileDTO>() {
             @Override
             protected void updateItem(SaveFileDTO save, boolean empty) {
                 super.updateItem(save, empty);
@@ -142,19 +145,28 @@ public class SaveLoadControllerFX {
                 } else {
                     setText(save.toString());
                     if (save.isAutoSave()) {
+                        // Auto-save: dark background with green text
                         setStyle("-fx-background-color: #263238; -fx-text-fill: #81c784;");
                     } else {
-                        setStyle("-fx-text-fill: white;");
+                        // Manual save: normal background with white text
+                        setStyle("-fx-background-color: #1a1a2e; -fx-text-fill: #f1f1f1;");
                     }
                 }
             }
         });
 
-        savesListView.getSelectionModel().selectedItemProperty().addListener(
-                (obs, oldVal, newVal) -> displaySaveDetails(newVal)
+        // Add selection listener to update details and track selected save
+        listView.getSelectionModel().selectedItemProperty().addListener(
+                (obs, oldVal, newVal) -> {
+                    displaySaveDetails(newVal);
+                    // Update the main reference when selection changes
+                    if (newVal != null) {
+                        savesListView = listView;
+                    }
+                }
         );
 
-        return savesListView;
+        return listView;
     }
 
     /**

@@ -48,8 +48,8 @@ public class DisenchantService {
 
             System.out.println("═".repeat(50));
             System.out.printf("💎 TOTAL SHARDS POSIBILE: %d\n", totalShardsValue);
-            System.out.printf("🔮 Shards actuale: %d\n", erou.getShards());
-            System.out.printf("🔮 Total după disenchant: %d\n", erou.getShards() + totalShardsValue);
+            System.out.printf("🔮 Shards actuale: %d\n", erou.getScrap());
+            System.out.printf("🔮 Total după disenchant: %d\n", erou.getScrap() + totalShardsValue);
 
             System.out.println("\n🎯 Opțiuni disponibile:");
             System.out.println((disenchantableItems.size() + 1) + ". 💎 Disenchant toate obiectele");
@@ -84,7 +84,7 @@ public class DisenchantService {
         System.out.println("✨ Descompune echipamentul în shards magice!");
         System.out.println();
         System.out.printf("👤 %s | 🔮 Shards: %d | 📦 Obiecte: %d\n",
-                erou.getNume(), erou.getShards(), erou.getInventar().size());
+                erou.getNume(), erou.getScrap(), erou.getInventar().size());
     }
 
     private void disenchantSingleItem(Erou erou, ObiectEchipament item, Scanner scanner) {
@@ -105,7 +105,7 @@ public class DisenchantService {
         }
 
         System.out.printf("\n🔮 Vei primi: %d shards\n", shardsValue);
-        System.out.printf("🔮 Total shards după: %d\n", erou.getShards() + shardsValue);
+        System.out.printf("🔮 Total shards după: %d\n", erou.getScrap() + shardsValue);
 
         System.out.println("\n⚠️ ATENȚIE: Această acțiune este IREVERSIBILĂ!");
         System.out.printf("❓ Confirmi disenchanting pentru %s? (y/n): ", item.getNume());
@@ -113,11 +113,11 @@ public class DisenchantService {
         if (Validator.readConfirmation(scanner, "")) {
             // Efectuează disenchant
             erou.removeFromInventar(item);
-            erou.adaugaShards(shardsValue);
+            erou.adaugaScrap(shardsValue);
 
             System.out.println("\n✅ DISENCHANT REUȘIT!");
             System.out.printf("🔮 Ai primit %d shards din %s!\n", shardsValue, item.getNume());
-            System.out.printf("💎 Total shards: %d\n", erou.getShards());
+            System.out.printf("💎 Total shards: %d\n", erou.getScrap());
             System.out.println("✨ Energia magică a obiectului a fost eliberată!");
 
             waitForEnter();
@@ -135,7 +135,7 @@ public class DisenchantService {
 
         System.out.printf("📦 Vei disenchanta %d obiecte\n", items.size());
         System.out.printf("🔮 Total shards: %d\n", totalShards);
-        System.out.printf("🔮 Shards după disenchant: %d\n", erou.getShards() + totalShards);
+        System.out.printf("🔮 Shards după disenchant: %d\n", erou.getScrap() + totalShards);
 
         System.out.println("\n📋 Lista obiectelor:");
         for (ObiectEchipament item : items) {
@@ -154,11 +154,11 @@ public class DisenchantService {
             for (ObiectEchipament item : items) {
                 erou.removeFromInventar(item);
             }
-            erou.adaugaShards(totalShards);
+            erou.adaugaScrap(totalShards);
 
             System.out.println("\n✅ DISENCHANT MASIV REUȘIT!");
             System.out.printf("🔮 Ai primit %d shards din %d obiecte!\n", totalShards, items.size());
-            System.out.printf("💎 Total shards: %d\n", erou.getShards());
+            System.out.printf("💎 Total shards: %d\n", erou.getScrap());
             System.out.println("✨ O explozie de energie magică umple camera!");
             System.out.println("🌟 Acum poți folosi shards-urile pentru upgrade echipament!");
 

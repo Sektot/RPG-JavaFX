@@ -32,7 +32,7 @@ public class TownService {
                 erou.getViata(), erou.getViataMaxima(),
                 erou.getTipResursa(), erou.getResursaCurenta(), erou.getResursaMaxima());
         System.out.printf("│ 💰 Gold: %d  │  💎 Shards: %d  │  ⭐ XP: %d/%d%n",
-                erou.getGold(), erou.getShards(),
+                erou.getGold(), erou.getScrap(),
                 erou.getXp(), erou.getXpNecesarPentruUrmatoarelNivel());
 
         if (erou.getStatPoints() > 0) {

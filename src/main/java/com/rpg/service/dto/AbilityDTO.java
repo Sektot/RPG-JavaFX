@@ -98,16 +98,24 @@ public class AbilityDTO {
         private final int experienceEarned;
         private final List<ObiectEchipament> loot;
         private final int shaormaReward;
+        private final com.rpg.model.items.Jewel jewelDrop; // 💎 NEW: Jewel drops
 
         public BattleResultDTO(boolean victory, String message, int goldEarned,
                                int experienceEarned, List<ObiectEchipament> loot,
                                int shaormaReward) {
+            this(victory, message, goldEarned, experienceEarned, loot, shaormaReward, null);
+        }
+
+        public BattleResultDTO(boolean victory, String message, int goldEarned,
+                               int experienceEarned, List<ObiectEchipament> loot,
+                               int shaormaReward, com.rpg.model.items.Jewel jewelDrop) {
             this.victory = victory;
             this.message = message;
             this.goldEarned = goldEarned;
             this.experienceEarned = experienceEarned;
             this.loot = loot;
             this.shaormaReward = shaormaReward;
+            this.jewelDrop = jewelDrop;
         }
 
         public boolean isVictory() { return victory; }
@@ -116,7 +124,9 @@ public class AbilityDTO {
         public int getExperienceEarned() { return experienceEarned; }
         public List<ObiectEchipament> getLoot() { return loot; }
         public int getShaormaReward() { return shaormaReward; }
+        public com.rpg.model.items.Jewel getJewelDrop() { return jewelDrop; }
         public boolean hasLoot() { return loot != null && !loot.isEmpty(); }
+        public boolean hasJewelDrop() { return jewelDrop != null; }
     }
 
     /**

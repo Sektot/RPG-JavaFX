@@ -252,6 +252,10 @@ public class SaveLoadServiceFX {
         try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(filePath))) {
             Erou erou = (Erou) ois.readObject();
             Date saveDate = (Date) ois.readObject();
+
+            // Migrate old stat points to passive points (for talent tree)
+            erou.migrateStatPointsToPassive();
+
             return erou;
         } catch (IOException | ClassNotFoundException e) {
             System.err.println("Eroare la încărcarea jocului: " + e.getMessage());

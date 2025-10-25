@@ -1,5 +1,6 @@
 package com.rpg.service;
 
+import com.rpg.model.items.Jewel;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.model.items.ObiectEchipament.Raritate;
 import com.rpg.model.items.ObiectEchipament.TipEchipament;
@@ -768,6 +769,127 @@ public class LootGenerator {
             case RARE -> "⭐⭐⭐";
             case EPIC -> "⭐⭐⭐⭐";
             case LEGENDARY -> "⭐⭐⭐⭐⭐";
+        };
+    }
+
+    // ==================== JEWEL LOOT GENERATION ====================
+
+    /**
+     * Rolls for jewel drop from boss kills
+     * Bosses have higher chance to drop jewels
+     */
+    public static Jewel rollBossJewelDrop(int bossLevel) {
+        double dropChance = 0.40; // 40% chance for bosses to drop jewels
+
+        if (RandomUtils.chancePercent(dropChance * 100)) {
+            return JewelGeneratorService.generateRandomJewel(bossLevel);
+        }
+
+        return null;
+    }
+
+    /**
+     * Rolls for jewel drop from regular enemies
+     * Much lower chance than bosses
+     */
+    public static Jewel rollRegularJewelDrop(int enemyLevel) {
+        double dropChance = 0.05; // 5% chance for regular enemies
+
+        if (RandomUtils.chancePercent(dropChance * 100)) {
+            return JewelGeneratorService.generateRandomJewel(enemyLevel);
+        }
+
+        return null;
+    }
+
+    /**
+     * Guaranteed jewel drop for special occasions
+     * (quest rewards, secret chests, achievements)
+     */
+    public static Jewel generateGuaranteedJewel(int level, boolean highQuality) {
+        if (highQuality) {
+            // Higher chance for rare/epic/legendary
+            double roll = RandomUtils.randomDouble();
+            Jewel.JewelRarity rarity;
+
+            if (roll < 0.10) {
+                rarity = Jewel.JewelRarity.LEGENDARY;
+            } else if (roll < 0.30) {
+                rarity = Jewel.JewelRarity.EPIC;
+            } else if (roll < 0.60) {
+                rarity = Jewel.JewelRarity.RARE;
+            } else {
+                rarity = Jewel.JewelRarity.UNCOMMON;
+            }
+
+            Jewel.JewelType type = rollJewelType();
+            return JewelGeneratorService.generateJewel(type, rarity, level);
+        }
+
+        return JewelGeneratorService.generateRandomJewel(level);
+    }
+
+    /**
+     * Generates multiple jewels for special loot (secret rooms, bonus chests)
+     */
+    public static List<Jewel> generateJewelTreasure(int level, int count) {
+        List<Jewel> jewels = new ArrayList<>();
+
+        for (int i = 0; i < count; i++) {
+            // Slightly higher quality for treasure finds
+            double roll = RandomUtils.randomDouble();
+            if (roll < 0.3) {
+                jewels.add(generateGuaranteedJewel(level, true));
+            } else {
+                jewels.add(JewelGeneratorService.generateRandomJewel(level));
+            }
+        }
+
+        return jewels;
+    }
+
+    /**
+     * Helper method to roll jewel type
+     */
+    private static Jewel.JewelType rollJewelType() {
+        double roll = RandomUtils.randomDouble();
+
+        if (roll < 0.25) return Jewel.JewelType.CRIMSON;
+        if (roll < 0.50) return Jewel.JewelType.VIRIDIAN;
+        if (roll < 0.75) return Jewel.JewelType.COBALT;
+        if (roll < 0.95) return Jewel.JewelType.PRISMATIC;
+        return Jewel.JewelType.UNIQUE;
+    }
+
+    /**
+     * Displays jewel drop notification
+     */
+    public static void displayJewelDrop(Jewel jewel) {
+        String rarityIcon = getJewelRarityIcon(jewel.getRarity());
+
+        System.out.println("\n💎 " + rarityIcon + " " + jewel.getType().getIcon() + " " + jewel.getName() + " " + rarityIcon);
+        System.out.println("   " + jewel.getType().getDisplayName() + " | " + jewel.getRarity().getDisplayName());
+        System.out.println("   🎯 Level " + jewel.getRequiredLevel() + " | " + jewel.getModifiers().size() + " modifiers");
+
+        // Show modifiers
+        String[] modLines = jewel.getModifiersDescription().split("\n");
+        for (String line : modLines) {
+            System.out.println("   " + line);
+        }
+
+        System.out.println("   💰 Value: " + jewel.getPrice() + " gold");
+    }
+
+    /**
+     * Gets rarity icon for jewels
+     */
+    private static String getJewelRarityIcon(Jewel.JewelRarity rarity) {
+        return switch (rarity) {
+            case COMMON -> "⚪";
+            case UNCOMMON -> "🟢";
+            case RARE -> "🔵";
+            case EPIC -> "🟣";
+            case LEGENDARY -> "🟡";
         };
     }
 }

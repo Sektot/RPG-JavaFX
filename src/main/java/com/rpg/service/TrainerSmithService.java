@@ -93,7 +93,7 @@ public class TrainerSmithService {
 
             System.out.printf("👤 %s | Nivel: %d\n", erou.getNume(), erou.getNivel());
             System.out.printf("💰 Gold: %d | 🔮 Shards: %d | 🎯 Stat Points: %d\n",
-                    erou.getGold(), erou.getShards(), erou.getStatPoints());
+                    erou.getGold(), erou.getScrap(), erou.getStatPoints());
             System.out.printf("💪 STR: %d | 🎯 DEX: %d | 🧠 INT: %d\n",
                     erou.getStrength(), erou.getDexterity(), erou.getIntelligence());
             System.out.println("\n1. 🏋️ Antrenează Statistici");
@@ -711,7 +711,7 @@ public class TrainerSmithService {
         while (upgrading) {
             System.out.println("\n🛠️ ===== ÎMBUNĂTĂȚEȘTE ECHIPAMENT =====");
             //afiseaza shards available
-            System.out.printf("🔮 Shards disponibile: %d\n", erou.getShards());
+            System.out.printf("🔮 Shards disponibile: %d\n", erou.getScrap());
             System.out.println();
 
             System.out.println("📦 Echipament disponibil:");
@@ -738,7 +738,7 @@ public class TrainerSmithService {
                     System.out.printf("   🔮 Cost pentru +%d: %d shards\n",
                             item.getEnhancementLevel() + 1, enhanceCost);
                    //verifica daca eroul are destule shards
-                    if (erou.getShards() >= enhanceCost) {
+                    if (erou.getScrap() >= enhanceCost) {
                         System.out.println("   ✅ Poți face enhancement!");
                     } else {
                         //zice daca nu ai suficient
@@ -785,10 +785,10 @@ public class TrainerSmithService {
 
         //verifica  costul si cate shards ai available pentru enchant
         int enhanceCost = item.getNextEnhancementCost();
-        if (erou.getShards() < enhanceCost) {
+        if (erou.getScrap() < enhanceCost) {
             System.out.printf("\n❌ Nu ai destule shards!\n");
             System.out.printf("🔮 Ai: %d shards | Necesare: %d shards\n",
-                    erou.getShards(), enhanceCost);
+                    erou.getScrap(), enhanceCost);
             waitForEnter();
             return;
         }
@@ -850,7 +850,7 @@ public class TrainerSmithService {
         // Afișează costul si shards ramase
         System.out.printf(" \n 💰 COST ENHANCEMENT: \n ");
         System.out.printf("🔮 Cost: %d shards (Rămân: %d)\n",
-                enhanceCost, erou.getShards() - enhanceCost);
+                enhanceCost, erou.getScrap() - enhanceCost);
 
         System.out.println("\n🎯 Opțiuni:");
         // single time enchance
@@ -859,7 +859,7 @@ public class TrainerSmithService {
         // Opțiune pentru enhancement multiplu dacă are destule shards
         //face loop prin metoda pana cand e posibil calculand costul exponential
         //returneaza nivelele
-        int maxAffordable = calculateMaxAffordableEnhancements(item, erou.getShards());
+        int maxAffordable = calculateMaxAffordableEnhancements(item, erou.getScrap());
         //doar daca se pot 2 sau mai multe
         if (maxAffordable > 1) {
             System.out.printf("2. 🚀 Enhance la maxim (%d nivele)\n", maxAffordable);
@@ -884,13 +884,13 @@ public class TrainerSmithService {
                 if (Validator.readConfirmation(scanner,
                         "Confirmi enhancement pentru " + enhanceCost + " shards?")) {
 
-                    erou.scadeShards(enhanceCost);
+                    erou.scadeScrap(enhanceCost);
                     item.enhanceEquipment(1);
 
                     System.out.println("\n✅ ENHANCEMENT REUȘIT!");
                     System.out.printf("⬆️ %s este acum +%d!\n",
                             item.getNume(), item.getEnhancementLevel());
-                    System.out.printf("🔮 Shards rămase: %d\n", erou.getShards());
+                    System.out.printf("🔮 Shards rămase: %d\n", erou.getScrap());
 
                     waitForEnter();
                 }
@@ -905,13 +905,13 @@ public class TrainerSmithService {
                     System.out.printf("🔮 Cost total: %d shards\n", totalCost);
 
                     if (Validator.readConfirmation(scanner, "Confirmi enhancement maxim?")) {
-                        erou.scadeShards(totalCost);
+                        erou.scadeScrap(totalCost);
                         item.enhanceEquipment(maxAffordable);
 
                         System.out.println("\n🚀 ENHANCEMENT MAXIM REUȘIT!");
                         System.out.printf("⬆️ %s este acum +%d!\n",
                                 item.getNume(), item.getEnhancementLevel());
-                        System.out.printf("🔮 Shards rămase: %d\n", erou.getShards());
+                        System.out.printf("🔮 Shards rămase: %d\n", erou.getScrap());
 
                         waitForEnter();
                     }
@@ -995,7 +995,7 @@ public class TrainerSmithService {
         while (inServices) {
             System.out.println("\n🌟 ===== SERVICII SUPLIMENTARE =====");
             System.out.printf("👤 %s | 💰 Gold: %d | 🔮 Shards: %d\n",
-                    erou.getNume(), erou.getGold(), erou.getShards());
+                    erou.getNume(), erou.getGold(), erou.getScrap());
 
             System.out.println("\n🎯 Servicii disponibile:");
             System.out.println("1. 🧪 Upgrade Poțiuni (Flask Pieces)");

@@ -2,6 +2,7 @@ package com.rpg.service;
 
 import com.rpg.model.characters.Erou;
 import com.rpg.model.items.BuffPotion;
+import com.rpg.model.items.Jewel;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.dto.*;
 
@@ -25,6 +26,7 @@ public class InventoryServiceFX {
         CONSUMABILE("🧪 Consumabile"),
         POTIUNI_VINDECARE("❤️ Poțiuni Vindecare"),
         POTIUNI_BUFF("💪 Poțiuni Buff"),
+        BIJUTERII("💎 Bijuterii (Jewels)"),
         SPECIALE("✨ Iteme Speciale");
 
         private final String displayName;
@@ -51,6 +53,7 @@ public class InventoryServiceFX {
             case CONSUMABILE -> getConsumables(erou);
             case POTIUNI_VINDECARE -> getHealingPotions(erou);
             case POTIUNI_BUFF -> getBuffPotions(erou);
+            case BIJUTERII -> getJewels(erou);
             case SPECIALE -> getSpecialItems(erou);
         };
     }
@@ -200,6 +203,19 @@ public class InventoryServiceFX {
 
         for (Map.Entry<BuffPotion.BuffType, Integer> entry : erou.getInventar().getBuffPotions().entrySet()) {
             items.add(createBuffPotionDTO(entry.getKey(), entry.getValue()));
+        }
+
+        return items;
+    }
+
+    /**
+     * 💎 Bijuterii (Jewels)
+     */
+    private List<InventoryItemDTO> getJewels(Erou erou) {
+        List<InventoryItemDTO> items = new ArrayList<>();
+
+        for (Jewel jewel : erou.getJewelInventory()) {
+            items.add(createJewelDTO(jewel));
         }
 
         return items;
@@ -633,6 +649,33 @@ public class InventoryServiceFX {
                 InventoryItemDTO.ItemType.SPECIAL,
                 quantity,
                 null
+        );
+    }
+
+    /**
+     * 💎 Creates a DTO for a Jewel
+     */
+    private InventoryItemDTO createJewelDTO(Jewel jewel) {
+        String displayName = jewel.getType().getIcon() + " " + jewel.getName();
+
+        StringBuilder description = new StringBuilder();
+        description.append(jewel.getType().getDisplayName()).append(" | ");
+        description.append(jewel.getRarity().getDisplayName()).append("\n");
+        description.append("Level: ").append(jewel.getRequiredLevel()).append("\n\n");
+
+        if (jewel.isSocketed()) {
+            description.append("⚠️ SOCKETED - In Talent Tree\n\n");
+        }
+
+        description.append(jewel.getModifiersDescription());
+
+        return new InventoryItemDTO(
+                "jewel_" + jewel.hashCode(),
+                displayName,
+                description.toString(),
+                InventoryItemDTO.ItemType.SPECIAL,
+                1,
+                jewel
         );
     }
 

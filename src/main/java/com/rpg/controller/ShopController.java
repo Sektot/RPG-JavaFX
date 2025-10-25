@@ -119,6 +119,22 @@ public class ShopController {
         itemListView.setStyle("-fx-font-size: 14px;");
         VBox.setVgrow(itemListView, Priority.ALWAYS);
 
+
+// ✅ ADAUGĂ ACEST COD PENTRU A FIXA CULOAREA TEXTULUI:
+        itemListView.setCellFactory(lv -> new ListCell<ShopItemDTO>() {
+            @Override
+            protected void updateItem(ShopItemDTO item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item.toString());
+                    setStyle("-fx-text-fill: white;"); // ✨ Setează textul alb
+                }
+            }
+        });
+
         // Când se selectează un produs, afișează detaliile
         itemListView.getSelectionModel().selectedItemProperty().addListener(
                 (obs, oldVal, newVal) -> displayItemDetails(newVal)

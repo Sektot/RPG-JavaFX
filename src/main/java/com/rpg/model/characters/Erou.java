@@ -5,6 +5,7 @@ import com.rpg.model.effects.BuffStack;
 import com.rpg.model.items.BuffPotion;
 import com.rpg.model.items.EnchantScroll;
 import com.rpg.model.items.FlaskPiece;
+import com.rpg.model.items.Jewel;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.PotionUpgradeService;
 import com.rpg.service.dto.EquipResult;
@@ -14,8 +15,10 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 
 // Clasa aia blanao , blueprint si parinte pt celelalte clase de joc
@@ -33,7 +36,7 @@ public class Erou implements Serializable {
     private int viata;
     private int viataMaxima;
     private int gold;
-    private int shards;
+    private int scrap;
 
     // shaorma
     private int shaormaRevival = 1;
@@ -43,18 +46,61 @@ public class Erou implements Serializable {
     private int dexterity;
     private int intelligence;
     private int statPoints;
+    private int passivePoints; // For talent tree allocation
+    private Set<Integer> allocatedTalentNodes = new HashSet<>();
+
+    // 🌳 TALENT TREE BONUSES (persisted)
+    private double talentCritChance = 0;
+    private double talentCritMultiplier = 0;
+    private double talentLifesteal = 0;
+    private double talentDodge = 0;
+    private double talentAttackSpeed = 0;
+    private double talentDamageBonus = 0;
+    private int talentFlatHP = 0;
+    private int talentFlatDefense = 0;
+    private double talentHPPercent = 0;
+    private double talentDefensePercent = 0;
+
+    // ⏱️ CONDITION TRACKING (transient - not saved)
+    private transient long lastHitTime = 0;     // When hero was last hit
+    private transient long lastKillTime = 0;    // When hero last killed an enemy
+    private transient boolean isInBossFight = false;  // Currently fighting a boss
+
+    // 🔮 CONDITIONAL BONUSES FROM TALENT TREE (transient - recalculated dynamically)
+    // These are populated by checking allocated nodes against current conditions
+    private transient double conditionalDamage_FullHP = 0;
+    private transient double conditionalDamage_LowHP = 0;
+    private transient double conditionalDefense_FullHP = 0;
+    private transient double conditionalCrit_NotHitRecently = 0;
 
     // Statistici derivate
     private int defense;
 
     // Inventar și consumabile
     private final List<ObiectEchipament> inventar;
+    private final List<Jewel> jewelInventory;  // Separate inventory for jewels
+    private final List<com.rpg.model.inventory.ItemPocket> itemPockets;  // Custom pockets for organization
     protected List<Abilitate> abilitati;
     private int healthPotions;
     private int manaPotions;
 
     // Buff-uri active
     private final Map<String, BuffStack> buffuriActive;
+
+    // 🆕 RUN ITEM MODIFIERS (pentru dungeon roguelike)
+    private transient double runItemDamageMultiplier = 1.0;
+    private transient int runItemFlatDamage = 0;
+    private transient double runItemDefenseMultiplier = 1.0;
+    private transient int runItemFlatDefense = 0;
+    private transient double runItemDodgeBonus = 0.0;
+    private transient double runItemLifesteal = 0.0;
+    private transient int runItemRegenPerTurn = 0;
+    private transient double runItemGoldMultiplier = 1.0;
+    private transient double runItemCritBonus = 0.0;
+    private transient Map<String, Integer> runItemElementalDamage = new HashMap<>();
+
+    // 🆕 DUNGEON META-PROGRESSION (persists between dungeon runs)
+    private com.rpg.dungeon.model.DungeonProgression dungeonProgression;
 
     // RESURSE PENTRU CLASE SPECIFICE - PUBLIC pentru accesibilitate
     public int resursaCurenta = 0;
@@ -96,12 +142,14 @@ public class Erou implements Serializable {
         calculateDerivedStats();
         this.viata = this.viataMaxima;
         this.gold = GameConstants.INITIAL_GOLD;
-        this.shards = 0;
+        this.scrap = 0;
         this.shaormaRevival = 1; // Începe cu 0 șaorme
         this.healthPotions = GameConstants.INITIAL_POTIONS;
         this.manaPotions = GameConstants.INITIAL_MANA_POTIONS;
 
         this.inventar = new ArrayList<>();
+        this.jewelInventory = new ArrayList<>();  // Initialize jewel inventory
+        this.itemPockets = new ArrayList<>();  // Initialize item pockets
         this.abilitati = new ArrayList<>();
         this.buffuriActive = new HashMap<>();
         this.echipat = new HashMap<>();
@@ -111,13 +159,37 @@ public class Erou implements Serializable {
     }
 
     private void calculateDerivedStats() {
-        this.viataMaxima = GameConstants.BASE_HEALTH +
+        // Base calculations
+        int baseHP = GameConstants.BASE_HEALTH +
                 (strength * GameConstants.HEALTH_PER_STRENGTH) +
                 (nivel * GameConstants.HEALTH_PER_LEVEL);
+
+        // Apply talent tree flat HP bonus
+        baseHP += talentFlatHP;
+
+        // Apply talent tree % HP bonus
+        double totalHPPercent = talentHPPercent / 100.0;
+
+        // Apply dungeon progression HP bonus (permanent upgrade)
+        if (getDungeonProgression() != null) {
+            totalHPPercent += getDungeonProgression().getMaxHpBonusPercent();
+        }
+
+        this.viataMaxima = (int)(baseHP * (1.0 + totalHPPercent));
+
+        // Mana calculation
         int manaMaxima = GameConstants.BASE_MANA +
                 (intelligence * GameConstants.MANA_PER_INTELLIGENCE) +
                 (nivel * GameConstants.MANA_PER_LEVEL);
-        this.defense = GameConstants.BASE_DEFENSE + (strength / 3) + (dexterity / 4);
+
+        // Base defense
+        int baseDefense = GameConstants.BASE_DEFENSE + (strength / 3) + (dexterity / 4);
+
+        // Apply talent tree flat defense bonus
+        baseDefense += talentFlatDefense;
+
+        // Apply talent tree % defense bonus
+        this.defense = (int)(baseDefense * (1.0 + talentDefensePercent / 100.0));
 
         if (this.viata > this.viataMaxima) this.viata = this.viataMaxima;
         if (this.mana > manaMaxima) this.mana = manaMaxima;
@@ -170,6 +242,33 @@ public class Erou implements Serializable {
         return shaormaRevival > 0;
     }
 
+    // ================== DUNGEON TICKET/TOKEN SYSTEM ==================
+    // These methods delegate to DungeonProgression to keep tokens in one place
+
+    public void adaugaDungeonTickets(int cantitate) {
+        getDungeonProgression().addTokens(cantitate);
+        if (cantitate > 0) {
+            System.out.printf("🎫 Ai primit %d Dungeon Tokens! (Total: %d)\n",
+                    cantitate, getDungeonProgression().getDungeonTokens());
+        }
+    }
+
+    public int getDungeonTickets() {
+        return getDungeonProgression().getDungeonTokens();
+    }
+
+    public boolean areDungeonTickets() {
+        return getDungeonProgression().getDungeonTokens() > 0;
+    }
+
+    public boolean folosesteDungeonTicket() {
+        if (getDungeonProgression().getDungeonTokens() <= 0) {
+            return false;
+        }
+        getDungeonProgression().addTokens(-1);
+        return true;
+    }
+
 
 //============================
 //    public int getXpNecesar() {
@@ -219,8 +318,8 @@ public class Erou implements Serializable {
         System.out.println("📊 Progresul tău până acum:");
         System.out.printf("🏆 Nivel atins: %d\n", nivel);
         System.out.printf("⭐ XP acumulat: %d\n", xp);
-        System.out.printf("💰 Gold: %d | 💎 Shards: %d | 🌯 Șaorme Revival: %d\n",
-                gold, shards, shaormaRevival);
+        System.out.printf("💰 Gold: %d | 🔧 Scrap: %d | 🌯 Șaorme Revival: %d\n",
+                gold, scrap, shaormaRevival);
 
         System.out.println("\n⚱️ În luptă mori, dar spiritul tău persistă...");
 
@@ -284,6 +383,157 @@ public class Erou implements Serializable {
         return false;
     }
 
+    public void increaseStatPoints(int amount) {
+        this.statPoints += amount;
+    }
+
+    public int getPassivePoints() {
+        return passivePoints;
+    }
+
+    public void increasePassivePoints(int amount) {
+        this.passivePoints += amount;
+    }
+
+    /**
+     * Migrates old stat points to passive points (for talent tree)
+     * Call this once after loading old saves
+     */
+    public void migrateStatPointsToPassive() {
+        if (statPoints > 0) {
+            passivePoints += statPoints;
+            statPoints = 0;
+            System.out.println("📊 Migrated " + statPoints + " stat points to passive points for talent tree");
+        }
+    }
+
+    public boolean decreasePassivePoints(int amount) {
+        if (passivePoints >= amount) {
+            passivePoints -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    public Set<Integer> getAllocatedTalentNodes() {
+        return allocatedTalentNodes;
+    }
+
+    public void setAllocatedTalentNodes(Set<Integer> nodes) {
+        this.allocatedTalentNodes = nodes;
+    }
+
+    // Talent tree bonus getters
+    public double getTalentCritChance() { return talentCritChance; }
+    public double getTalentCritMultiplier() { return talentCritMultiplier; }
+    public double getTalentLifesteal() { return talentLifesteal; }
+    public double getTalentDodge() { return talentDodge; }
+    public double getTalentAttackSpeed() { return talentAttackSpeed; }
+    public double getTalentDamageBonus() { return talentDamageBonus; }
+    public int getTalentFlatHP() { return talentFlatHP; }
+    public int getTalentFlatDefense() { return talentFlatDefense; }
+    public double getTalentHPPercent() { return talentHPPercent; }
+    public double getTalentDefensePercent() { return talentDefensePercent; }
+
+    // Talent tree bonus modifiers (for allocation/deallocation)
+    public void modifyTalentCritChance(double amount) { this.talentCritChance += amount; }
+    public void modifyTalentCritMultiplier(double amount) { this.talentCritMultiplier += amount; }
+    public void modifyTalentLifesteal(double amount) { this.talentLifesteal += amount; }
+    public void modifyTalentDodge(double amount) { this.talentDodge += amount; }
+    public void modifyTalentAttackSpeed(double amount) { this.talentAttackSpeed += amount; }
+    public void modifyTalentDamageBonus(double amount) { this.talentDamageBonus += amount; }
+    public void modifyTalentFlatHP(int amount) {
+        this.talentFlatHP += amount;
+        calculateDerivedStats(); // Recalculate max HP
+    }
+    public void modifyTalentFlatDefense(int amount) {
+        this.talentFlatDefense += amount;
+        calculateDerivedStats(); // Recalculate defense
+    }
+    public void modifyTalentHPPercent(double amount) {
+        this.talentHPPercent += amount;
+        calculateDerivedStats(); // Recalculate max HP
+    }
+    public void modifyTalentDefensePercent(double amount) {
+        this.talentDefensePercent += amount;
+        calculateDerivedStats(); // Recalculate defense
+    }
+
+    // Condition tracking getters/setters
+    public long getLastHitTime() { return lastHitTime; }
+    public void setLastHitTime(long time) { this.lastHitTime = time; }
+    public void recordHit() { this.lastHitTime = System.currentTimeMillis(); }
+
+    public long getLastKillTime() { return lastKillTime; }
+    public void setLastKillTime(long time) { this.lastKillTime = time; }
+    public void recordKill() { this.lastKillTime = System.currentTimeMillis(); }
+
+    public boolean isInBossFight() { return isInBossFight; }
+    public void setInBossFight(boolean inBossFight) { this.isInBossFight = inBossFight; }
+
+    // Check if conditions are met (for conditional bonuses)
+    public boolean isAtFullHP() {
+        return viata >= viataMaxima;
+    }
+
+    public boolean isAtLowHP() {
+        return viata < (viataMaxima * 0.35);
+    }
+
+    public boolean wasHitRecently() {
+        return (System.currentTimeMillis() - lastHitTime) < 4000; // 4 seconds
+    }
+
+    public boolean wasNotHitRecently() {
+        return !wasHitRecently() || lastHitTime == 0;
+    }
+
+    public boolean killedRecently() {
+        return (System.currentTimeMillis() - lastKillTime) < 4000; // 4 seconds
+    }
+
+    // Setters for conditional bonuses (called by TalentTreeController when allocating nodes)
+    public void setConditionalDamage_FullHP(double value) { this.conditionalDamage_FullHP = value; }
+    public void setConditionalDamage_LowHP(double value) { this.conditionalDamage_LowHP = value; }
+    public void setConditionalDefense_FullHP(double value) { this.conditionalDefense_FullHP = value; }
+    public void setConditionalCrit_NotHitRecently(double value) { this.conditionalCrit_NotHitRecently = value; }
+
+    /**
+     * Get conditional damage bonus based on current state
+     */
+    public double getConditionalDamageBonus() {
+        double bonus = 0;
+        if (isAtFullHP() && conditionalDamage_FullHP > 0) {
+            bonus += conditionalDamage_FullHP;
+        }
+        if (isAtLowHP() && conditionalDamage_LowHP > 0) {
+            bonus += conditionalDamage_LowHP;
+        }
+        return bonus;
+    }
+
+    /**
+     * Get conditional defense bonus based on current state
+     */
+    public double getConditionalDefenseBonus() {
+        double bonus = 0;
+        if (isAtFullHP() && conditionalDefense_FullHP > 0) {
+            bonus += conditionalDefense_FullHP;
+        }
+        return bonus;
+    }
+
+    /**
+     * Get conditional crit bonus based on current state
+     */
+    public double getConditionalCritBonus() {
+        double bonus = 0;
+        if (wasNotHitRecently() && conditionalCrit_NotHitRecently > 0) {
+            bonus += conditionalCrit_NotHitRecently;
+        }
+        return bonus;
+    }
+
     public void increaseStrength(int amount) {
         this.strength += amount;
         calculateDerivedStats();
@@ -304,9 +554,9 @@ public class Erou implements Serializable {
 
 
     // asta e pt upgrade de echipament
-    public boolean scadeShards(int amount) {
-        if (shards >= amount) {
-            shards -= amount;
+    public boolean scadeScrap(int amount) {
+        if (scrap >= amount) {
+            scrap -= amount;
             return true;
         }
         return false;
@@ -554,14 +804,31 @@ public boolean useManaPotion() {
         double baseCritChance = GameConstants.BASE_CRIT_CHANCE;
         double dexBonus = getDexterityTotal() * GameConstants.CRIT_CHANCE_PER_DEX;
         double equipmentBonus = getEquipmentBonus("crit_chance"); // ✅ ADAUGĂ echipament
-        return Math.min(50.0, baseCritChance + dexBonus + equipmentBonus);
+        double runItemBonus = runItemCritBonus * 100; // Convert 0.15 -> 15%
+        double talentBonus = talentCritChance; // 🌳 Talent tree bonus
+        double conditionalBonus = getConditionalCritBonus(); // 🔮 Conditional bonus
+        return Math.min(95.0, baseCritChance + dexBonus + equipmentBonus + runItemBonus + talentBonus + conditionalBonus);
     }
 
     public double getDodgeChanceTotal() {
         double baseDodgeChance = GameConstants.BASE_DODGE_CHANCE;
         double dexBonus = getDexterityTotal() * GameConstants.DODGE_CHANCE_PER_DEX;
         double equipmentBonus = getEquipmentBonus("dodge_chance"); // ✅ ADAUGĂ echipament
-        return Math.min(75.0, baseDodgeChance + dexBonus + equipmentBonus);
+        double runItemBonus = runItemDodgeBonus * 100; // Convert 0.15 -> 15%
+        double talentBonus = talentDodge; // 🌳 Talent tree bonus
+        return Math.min(75.0, baseDodgeChance + dexBonus + equipmentBonus + runItemBonus + talentBonus);
+    }
+
+    public double getCritMultiplierTotal() {
+        double baseMultiplier = GameConstants.CRIT_DAMAGE_MULTIPLIER; // Usually 2.0 (200%)
+        double talentBonus = talentCritMultiplier / 100.0; // Convert 50% -> 0.5
+        return baseMultiplier + talentBonus; // e.g., 2.0 + 0.5 = 2.5x damage
+    }
+
+    public double getLifestealTotal() {
+        double runItemBonus = this.runItemLifesteal; // Already in decimal form (0.15 = 15%)
+        double talentBonus = this.talentLifesteal / 100.0; // Convert 5% -> 0.05
+        return runItemBonus + talentBonus;
     }
 
     public int getDefenseTotal() {
@@ -674,13 +941,14 @@ public boolean useManaPotion() {
             xpNecesarPentruUrmatoarelNivel = (int)(GameConstants.BASE_XP_REQUIRED *
                     Math.pow(GameConstants.XP_MULTIPLIER, nivel - 1));
 
-            int statPointsEarned = GameConstants.STAT_POINTS_PER_LEVEL;
-            if (nivel % 5 == 0) statPointsEarned += 2; // Bonus la multipli de 5
-            statPoints += statPointsEarned;
+            // Passive points for talent tree (replaces old stat point system)
+            int passivePointsEarned = 3; // Base passive points (was STAT_POINTS_PER_LEVEL)
+            if (nivel % 5 == 0) passivePointsEarned += 2; // Bonus at multiples of 5
+            passivePoints += passivePointsEarned;
 
             // 🔇 QUIET LEVEL UP - doar essentials
-            System.out.printf("📈 Level %d → %d (+%d stat points)\\n",
-                    nivel - 1, nivel, statPointsEarned);
+            System.out.printf("📈 Level %d → %d (+%d passive points)\\n",
+                    nivel - 1, nivel, passivePointsEarned);
 
             int oldViataMax = viataMaxima;
             calculateDerivedStats();
@@ -702,8 +970,8 @@ public boolean useManaPotion() {
 
     public void adaugaGold(int gold) { this.gold += gold; }
    // public void decreaseGold(int amount) { this.gold = Math.max(0, this.gold - amount); }
-    public void adaugaShards(int shards) { this.shards += shards; }
-   // public void decreaseShards(int amount) { this.shards = Math.max(0, this.shards - amount); }
+    public void adaugaScrap(int scrap) { this.scrap += scrap; }
+   // public void decreaseScrap(int amount) { this.scrap = Math.max(0, this.scrap - amount); }
 
 
     //ii clar ce face ori din inamici ori din shop
@@ -711,6 +979,85 @@ public boolean useManaPotion() {
         if (obiect != null) {
             inventar.add(obiect);
         }
+    }
+
+    // ==================== JEWEL INVENTORY MANAGEMENT ====================
+
+    /**
+     * Adds a jewel to the jewel inventory
+     */
+    public void addJewel(Jewel jewel) {
+        if (jewel != null) {
+            jewelInventory.add(jewel);
+            System.out.printf("💎 Gained jewel: %s\n", jewel.getName());
+        }
+    }
+
+    /**
+     * Removes a jewel from the jewel inventory
+     */
+    public boolean removeJewel(Jewel jewel) {
+        return jewelInventory.remove(jewel);
+    }
+
+    /**
+     * Gets all jewels in inventory
+     */
+    public List<Jewel> getJewelInventory() {
+        return new ArrayList<>(jewelInventory);
+    }
+
+    /**
+     * Gets all unsocketed jewels (available for insertion)
+     */
+    public List<Jewel> getAvailableJewels() {
+        return jewelInventory.stream()
+                .filter(jewel -> !jewel.isSocketed())
+                .toList();
+    }
+
+    /**
+     * Gets all socketed jewels
+     */
+    public List<Jewel> getSocketedJewels() {
+        return jewelInventory.stream()
+                .filter(Jewel::isSocketed)
+                .toList();
+    }
+
+    /**
+     * Finds a jewel by name
+     */
+    public Jewel findJewelByName(String name) {
+        return jewelInventory.stream()
+                .filter(jewel -> jewel.getName().equals(name))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Gets the total count of jewels in inventory
+     */
+    public int getJewelCount() {
+        return jewelInventory.size();
+    }
+
+    /**
+     * Sells a jewel for gold
+     */
+    public boolean sellJewel(Jewel jewel) {
+        if (jewel == null || jewel.isSocketed()) {
+            return false; // Cannot sell socketed jewels
+        }
+
+        if (jewelInventory.remove(jewel)) {
+            int sellPrice = (int)(jewel.getPrice() * 0.7); // 70% of purchase price
+            gold += sellPrice;
+            System.out.printf("💰 Sold %s for %d gold!\n", jewel.getName(), sellPrice);
+            return true;
+        }
+
+        return false;
     }
 
     // vindeca eroul cu set amount, ori in potions ori din buffuri de regen
@@ -786,6 +1133,15 @@ public boolean useManaPotion() {
 // setter la mana potion
     public void setManaPotionTier(PotionUpgradeService.PotionTier tier) {
         this.manaPotionTier = tier;
+    }
+
+    // upgrade methods
+    public void upgradeHealthPotionTier() {
+        this.healthPotionTier = healthPotionTier.getNext();
+    }
+
+    public void upgradeManaPotionTier() {
+        this.manaPotionTier = manaPotionTier.getNext();
     }
 
 // calcul de heal pe baza la tier
@@ -1028,8 +1384,8 @@ public boolean useManaPotion() {
 
         // =================== RESURSE SI CONSUMABILE ===================
         System.out.println("\n💰 RESURSE:");
-        System.out.printf("💰 Gold: %d | 💎 Shards: %d | 🎯 Puncte stat: %d\n",
-                gold, shards, statPoints);
+        System.out.printf("💰 Gold: %d | 🔧 Scrap: %d | 🎯 Puncte stat: %d\n",
+                gold, scrap, statPoints);
         System.out.printf("🧪 Berice: %d | 💙 Energizant Profi %s: %d\n",
                 healthPotions, tipResursa.toLowerCase(), manaPotions);
 
@@ -1188,7 +1544,7 @@ public boolean useManaPotion() {
     public int getIntelligence() { return intelligence; }
     public int getDefense() { return defense; }
     public int getGold() { return gold; }
-    public int getShards() { return shards; }
+    public int getScrap() { return scrap; }
     public int getHealthPotions() { return healthPotions; }
     public int getManaPotions() { return manaPotions; }
    // public List<ObiectEchipament> getInventar() { return new ArrayList<>(inventar); }
@@ -1553,6 +1909,15 @@ public boolean useManaPotion() {
             totalDamage += (bonuses.getOrDefault("damage_bonus", 0) / 2);
         }
 
+        // Apply talent tree damage bonus (% increased damage)
+        totalDamage = (int)(totalDamage * (1.0 + talentDamageBonus / 100.0));
+
+        // Apply conditional damage bonus
+        double conditionalBonus = getConditionalDamageBonus();
+        if (conditionalBonus > 0) {
+            totalDamage = (int)(totalDamage * (1.0 + conditionalBonus / 100.0));
+        }
+
         return totalDamage;
     }
 
@@ -1778,8 +2143,8 @@ public boolean useManaPotion() {
 
 
 
-    public void consumeShards(int amount) {
-        shards = Math.max(0, shards - amount);
+    public void consumeScrap(int amount) {
+        scrap = Math.max(0, scrap - amount);
     }
 
 
@@ -1794,12 +2159,42 @@ public boolean useManaPotion() {
             baseDamage += arma.getTotalBonuses().getOrDefault("Damage", 0);
         }
 
+        // 🆕 APLICĂ RUN ITEM DAMAGE MODIFIERS
+        // Flat damage boost
+        baseDamage += runItemFlatDamage;
+
+        // Percentage damage boost
+        baseDamage = (int) (baseDamage * runItemDamageMultiplier);
+
+        // Elemental damage (nu se modifică cu % boost, se adaugă direct)
+        if (runItemElementalDamage != null) {
+            for (int elementalDmg : runItemElementalDamage.values()) {
+                baseDamage += elementalDmg;
+            }
+        }
+
         return baseDamage;
     }
 
     public int primesteDamage(int damage) {
-        int finalDamage = Math.max(10, damage - defense);
+        // 🆕 APLICĂ RUN ITEM DEFENSE MODIFIERS
+        int effectiveDefense = defense + runItemFlatDefense;
+        effectiveDefense = (int) (effectiveDefense * runItemDefenseMultiplier);
+
+        // Apply conditional defense bonus
+        double conditionalDefenseBonus = getConditionalDefenseBonus();
+        if (conditionalDefenseBonus > 0) {
+            effectiveDefense = (int)(effectiveDefense * (1.0 + conditionalDefenseBonus / 100.0));
+        }
+
+        int finalDamage = Math.max(1, damage - effectiveDefense);
         viata = Math.max(0, viata - finalDamage);
+
+        // Track that hero was hit (for conditional bonuses)
+        if (finalDamage > 0) {
+            recordHit();
+        }
+
         return finalDamage;
     }
 
@@ -1809,21 +2204,7 @@ public boolean useManaPotion() {
     }
 
 
-    private void checkLevelUp() {
-        while (xp >= xpNecesarPentruUrmatoarelNivel) {
-            xp -= xpNecesarPentruUrmatoarelNivel;
-            nivel++;
-            statPoints += 2; // Câștigi 2 stat points per nivel
-            xpNecesarPentruUrmatoarelNivel = (int)(xpNecesarPentruUrmatoarelNivel * 1.5);
-
-            // Recalculează stats
-            calculateDerivedStats();
-
-            // Opțional: vindecă complet la level up
-            viata = viataMaxima;
-            resursaCurenta = resursaMaxima;
-        }
-    }
+    // Removed - old checkLevelUp replaced by main leveling system in castiga*XP
 
     public int getExperienta() {
         return xp;
@@ -1839,5 +2220,81 @@ public boolean useManaPotion() {
         return shaormaRevival;
     }
 
+// ==================== RUN ITEM MODIFIERS ====================
+
+    public double getRunItemDamageMultiplier() { return runItemDamageMultiplier; }
+    public void setRunItemDamageMultiplier(double multiplier) { this.runItemDamageMultiplier = multiplier; }
+
+    public int getRunItemFlatDamage() { return runItemFlatDamage; }
+    public void setRunItemFlatDamage(int damage) { this.runItemFlatDamage = damage; }
+
+    public double getRunItemDefenseMultiplier() { return runItemDefenseMultiplier; }
+    public void setRunItemDefenseMultiplier(double multiplier) { this.runItemDefenseMultiplier = multiplier; }
+
+    public int getRunItemFlatDefense() { return runItemFlatDefense; }
+    public void setRunItemFlatDefense(int defense) { this.runItemFlatDefense = defense; }
+
+    public double getRunItemDodgeBonus() { return runItemDodgeBonus; }
+    public void setRunItemDodgeBonus(double bonus) { this.runItemDodgeBonus = bonus; }
+
+    public double getRunItemLifesteal() { return runItemLifesteal; }
+    public void setRunItemLifesteal(double lifesteal) { this.runItemLifesteal = lifesteal; }
+
+    public int getRunItemRegenPerTurn() { return runItemRegenPerTurn; }
+    public void setRunItemRegenPerTurn(int regen) { this.runItemRegenPerTurn = regen; }
+
+    public double getRunItemGoldMultiplier() { return runItemGoldMultiplier; }
+    public void setRunItemGoldMultiplier(double multiplier) { this.runItemGoldMultiplier = multiplier; }
+
+    public double getRunItemCritBonus() { return runItemCritBonus; }
+    public void setRunItemCritBonus(double bonus) { this.runItemCritBonus = bonus; }
+
+    public void setRunItemElementalDamage(String element, int damage) {
+        if (runItemElementalDamage == null) {
+            runItemElementalDamage = new HashMap<>();
+        }
+        runItemElementalDamage.put(element, damage);
+    }
+
+    public int getRunItemElementalDamage(String element) {
+        if (runItemElementalDamage == null) return 0;
+        return runItemElementalDamage.getOrDefault(element, 0);
+    }
+
+    public Map<String, Integer> getRunItemElementalDamageMap() {
+        if (runItemElementalDamage == null) return new HashMap<>();
+        return new HashMap<>(runItemElementalDamage);
+    }
+
+    public void clearRunItemElementalDamage() {
+        if (runItemElementalDamage != null) {
+            runItemElementalDamage.clear();
+        }
+    }
+
+    // 🆕 DUNGEON PROGRESSION METHODS
+    public com.rpg.dungeon.model.DungeonProgression getDungeonProgression() {
+        if (dungeonProgression == null) {
+            dungeonProgression = new com.rpg.dungeon.model.DungeonProgression();
+        }
+        return dungeonProgression;
+    }
+
+    public void setDungeonProgression(com.rpg.dungeon.model.DungeonProgression progression) {
+        this.dungeonProgression = progression;
+    }
+
+    // 🎒 ITEM POCKETS METHODS
+    public List<com.rpg.model.inventory.ItemPocket> getItemPockets() {
+        return itemPockets;
+    }
+
+    public void addItemPocket(com.rpg.model.inventory.ItemPocket pocket) {
+        itemPockets.add(pocket);
+    }
+
+    public void removeItemPocket(com.rpg.model.inventory.ItemPocket pocket) {
+        itemPockets.remove(pocket);
+    }
 
 }

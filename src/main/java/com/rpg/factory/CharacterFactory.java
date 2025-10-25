@@ -43,11 +43,17 @@ public class CharacterFactory {
      * Creează un erou nou bazat pe clasă și nume - NECESARĂ pentru GameService.
      */
     public static Erou create(CharacterClass characterClass, String nume) {
-        return switch (characterClass) {
+        Erou erou = switch (characterClass) {
             case WARRIOR -> new Moldovean(nume);  // Schimbat
             case ROGUE -> new Oltean(nume);       // Schimbat
             case WIZARD -> new Ardelean(nume);    // Schimbat
         };
+
+        // Ensure hero starts with full HP and resources
+        erou.setViataCurenta(erou.getViataMaxima());
+        erou.setResursaCurenta(erou.getResursaMaxima());
+
+        return erou;
     }
 
     /**
@@ -114,7 +120,7 @@ public class CharacterFactory {
         // 💰 RESURSE MAXIME
         System.out.println("💰 Adding resources...");
         erou.setGold(50000);              // 50k gold
-        erou.adaugaShards(1000);          // 1k shards
+        erou.adaugaScrap(1000);          // 1k shards
 
         // 🧪 POTIONS STANDARD
         System.out.println("🧪 Adding potions...");
@@ -160,7 +166,7 @@ public class CharacterFactory {
         System.out.println("\n✅ GOD MODE HERO CREAT!");
         System.out.println("═".repeat(60));
         System.out.printf("👤 %s - Nivel %d\n", erou.getNume(), erou.getNivel());
-        System.out.printf("💰 Gold: %d | 💎 Shards: %d\n", erou.getGold(), erou.getShards());
+        System.out.printf("💰 Gold: %d | 💎 Shards: %d\n", erou.getGold(), erou.getScrap());
         System.out.printf("🧪 HP Potions: %d | 💙 Mana Potions: %d\n",
                 erou.getHealthPotions(), erou.getManaPotions());
         System.out.printf("🌯 Șaorme Revival: %d\n", erou.getShaormaRevival());

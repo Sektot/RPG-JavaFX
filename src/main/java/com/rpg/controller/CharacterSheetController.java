@@ -794,6 +794,11 @@ public class CharacterSheetController {
             addStatRow("🎯 Stat Points", String.valueOf(hero.getStatPointsToAllocate()));
         }
 
+        // Passive points for talent tree
+        if (hero.getPassivePoints() > 0) {
+            addStatRow("🌳 Passive Points", String.valueOf(hero.getPassivePoints()));
+        }
+
         addSeparator();
 
         // HP & Resources

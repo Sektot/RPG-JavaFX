@@ -66,7 +66,7 @@ public class InventoryService {
         System.out.println("║                    🎒  INVENTAR  🎒                        ║");
         System.out.println("╚════════════════════════════════════════════════════════════╝");
         System.out.printf("\n👤 %s | 💰 Gold: %d | 💎 Shards: %d\n",
-                erou.getNume(), erou.getGold(), erou.getShards());
+                erou.getNume(), erou.getGold(), erou.getScrap());
         System.out.printf("📦 Obiecte: %d/%d\n", erou.getInventar().size(), 100);
     }
 

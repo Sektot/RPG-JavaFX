@@ -320,14 +320,17 @@ public class ObiectEchipament implements Serializable {
 
         if (enhancementLevel > 0) {
             // Calculează bonusurile bazate pe enhancement level și raritate
-            double enhancementMultiplier = enhancementLevel * getRarityEnhancementMultiplier();
+            double rarityMultiplier = getRarityEnhancementMultiplier();
 
             // Crește toate bonusurile existente
+            // Each enhancement level gives at least +1 to each stat, plus bonus based on base value
             bonuses.forEach((stat, baseValue) -> {
-                int enhancementBonus = (int) (baseValue * enhancementMultiplier * 0.1); // 10% per nivel
-                if (enhancementBonus > 0) {
-                    enhancementBonuses.put(stat, enhancementBonus);
-                }
+                // Minimum +1 per enhancement level, plus percentage bonus
+                int flatBonus = enhancementLevel; // At least +1 per level
+                int percentBonus = (int) (baseValue * enhancementLevel * rarityMultiplier * 0.1); // 10% per nivel
+                int totalBonus = flatBonus + percentBonus;
+
+                enhancementBonuses.put(stat, totalBonus);
             });
 
             // Adaugă bonusuri speciale la anumite nivele

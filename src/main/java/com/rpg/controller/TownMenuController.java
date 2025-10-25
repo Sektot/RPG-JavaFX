@@ -1,10 +1,12 @@
 package com.rpg.controller;
 
+import com.rpg.dungeon.controller.DungeonController;
 import com.rpg.model.characters.Erou;
 import com.rpg.model.characters.Inamic;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.DungeonServiceFX;
 import com.rpg.service.EnemyGeneratorRomanesc;
+import com.rpg.service.JewelTestUtility;
 import com.rpg.service.SaveLoadServiceFX;
 import com.rpg.utils.DialogHelper;
 import javafx.geometry.Insets;
@@ -76,7 +78,10 @@ public class TownMenuController {
         Label goldLabel = new Label("💰 " + hero.getGold() + " gold");
         goldLabel.setStyle("-fx-text-fill: #f1c40f; -fx-font-size: 16px;");
 
-        heroInfo.getChildren().addAll(heroLabel, levelLabel, hpLabel, goldLabel);
+        Label tokensLabel = new Label("🎫 " + hero.getDungeonTickets() + " Dungeon Tokens");
+        tokensLabel.setStyle("-fx-text-fill: #3498db; -fx-font-size: 16px;");
+
+        heroInfo.getChildren().addAll(heroLabel, levelLabel, hpLabel, goldLabel, tokensLabel);
 
         box.getChildren().addAll(titleLabel, heroInfo);
         return box;
@@ -94,9 +99,13 @@ public class TownMenuController {
         Label menuTitle = new Label("📍 Ce vrei să faci?");
         menuTitle.setStyle("-fx-font-size: 20px; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        // ⚔️ DUNGEON
-        Button dungeonBtn = createMenuButton("⚔️ Gara de Nord (Dungeon)", "#e74c3c");
-        dungeonBtn.setOnAction(e -> handleDungeon());
+        // 🗺️ DUNGEON (MAIN BATTLE SYSTEM)
+        Button dungeonBtn = createMenuButton("🗺️ Enter the Dungeon", "#e74c3c");
+        dungeonBtn.setOnAction(e -> handleDungeonMain());
+
+        // 🏛️ DUNGEON UPGRADES SHOP
+        Button dungeonUpgradesBtn = createMenuButton("🏛️ Dungeon Upgrades Shop", "#8e44ad");
+        dungeonUpgradesBtn.setOnAction(e -> handleDungeonUpgrades());
 
         // 🛍️ ADVANCED SHOP
         Button shopBtn = createMenuButton("🛍️ Advanced Shop", "#f39c12");
@@ -108,11 +117,18 @@ public class TownMenuController {
 
 
 
-        // 🔨 SMITH & TRAINER
-        Button smithBtn = createMenuButton("🔨 Fierăria & Training", "#e67e22");
+        // 🔨 SMITH (Enhancement only)
+        Button smithBtn = createMenuButton("🔨 Fierăria", "#e67e22");
         smithBtn.setOnAction(e -> {
             SmithControllerFX smithController = new SmithControllerFX(stage, hero);
             stage.setScene(smithController.createScene());
+        });
+
+        // 🧙‍♂️ ALCHEMY WORKSHOP
+        Button alchemyBtn = createMenuButton("🧙‍♂️ Alchemy Workshop", "#9b59b6");
+        alchemyBtn.setOnAction(e -> {
+            AlchemyWorkshopController alchemyController = new AlchemyWorkshopController(stage, hero, () -> returnToTown());
+            stage.setScene(alchemyController.createScene());
         });
 
         // 🍺 TAVERN
@@ -122,31 +138,24 @@ public class TownMenuController {
             stage.setScene(tavernController.createScene());
         });
 
-        // 🎮 CHARACTER SHEET
-        Button characterBtn = createMenuButton("🎮 Character Sheet", "#9b59b6");
+        // 👤 CHARACTER (Consolidated: Sheet, Inventory, Talents, Stats)
+        Button characterBtn = createMenuButton("👤 Character", "#9b59b6");
         characterBtn.setOnAction(e -> {
-            CharacterSheetController characterController = new CharacterSheetController(stage, hero);
+            CharacterMenuController characterController = new CharacterMenuController(stage, hero, () -> returnToTown());
             stage.setScene(characterController.createScene());
-        });
-
-
-        // 🎒 INVENTORY
-        Button inventoryBtn = createMenuButton("🎒 Inventar", "#3498db");
-        inventoryBtn.setOnAction(e -> {
-            InventoryControllerFX inventoryController = new InventoryControllerFX(stage, hero);
-            stage.setScene(inventoryController.createScene());
         });
 
         // 💾 SAVE
         Button saveBtn = createMenuButton("💾 Salvează Joc", "#16a085");
         saveBtn.setOnAction(e -> handleSave());
 
-        // 📊 STATS
-        Button statsBtn = createMenuButton("📊 Statistici Complete", "#95a5a6");
-        statsBtn.setOnAction(e -> {
-            // TODO: Creează un StatsController dedicat sau afișează în dialog
-            showStatsDialog();
-        });
+        // ⚙️ OPTIONS
+        Button optionsBtn = createMenuButton("⚙️ Opțiuni", "#7f8c8d");
+        optionsBtn.setOnAction(e -> openOptions());
+
+        // 💎 JEWEL TEST (DEBUG BUTTON)
+        Button jewelTestBtn = createMenuButton("💎 [TEST] Add Test Jewels", "#f1c40f");
+        jewelTestBtn.setOnAction(e -> handleJewelTest());
 
         // 🔙 EXIT TO MAIN MENU
         Button exitBtn = createMenuButton("🔙 Meniu Principal", "#c0392b");
@@ -154,8 +163,9 @@ public class TownMenuController {
 
         menu.getChildren().addAll(
                 menuTitle,
-                dungeonBtn, shopBtn, smithBtn, tavernBtn,
-                inventoryBtn, characterBtn, saveBtn, statsBtn, exitBtn  // ✅ Adaugă characterBtn
+                dungeonBtn, dungeonUpgradesBtn, shopBtn, smithBtn, alchemyBtn, tavernBtn,
+                characterBtn, saveBtn, optionsBtn,
+                jewelTestBtn, exitBtn
         );
 
         return menu;
@@ -237,35 +247,68 @@ public class TownMenuController {
 
         if (confirm) {
             // Pornește dungeon exploration cu primul inamic
-            BattleControllerFX battleController = new BattleControllerFX(stage, hero, null, true, 1);
+            BattleControllerFX battleController = new BattleControllerFX(stage, hero, (com.rpg.model.characters.Inamic) null, true, 1);
             stage.setScene(battleController.createScene());
         }
     }
 
 
-    private void handleDungeon() {
-        // ✅ ADAUGĂ GENERAREA DE INAMICI:
-        EnemyGeneratorRomanesc generator = new EnemyGeneratorRomanesc();
+    /**
+     * 🗺️ Main Dungeon Entry - Now the primary battle system
+     */
+    private void handleDungeonMain() {
+        // Show depth selection dialog
+        com.rpg.dungeon.model.DungeonProgression progression = hero.getDungeonProgression();
+        final int maxDepth = Math.min(10, Math.max(1, progression.getDeepestDepthReached() + 1));
 
-        // Generează inamici pentru nivelul eroului
-        List<Inamic> enemies = generator.genereazaInamici(hero.getNivel());
+        // Build depth selection message
+        StringBuilder message = new StringBuilder();
+        message.append("Select dungeon depth to enter:\n\n");
+        message.append("Deepest cleared: ").append(progression.getDeepestDepthReached()).append("\n");
+        message.append("Available depths: 1-").append(maxDepth).append("\n\n");
+        message.append("💡 Higher depths have:\n");
+        message.append("  • Stronger enemies\n");
+        message.append("  • Better loot\n");
+        message.append("  • More tokens\n\n");
+        message.append("Enter depth (1-").append(maxDepth).append("):");
 
-        if (enemies.isEmpty()) {
-            DialogHelper.showWarning("Nu s-au putut genera inamici!","hopa");
-            return;
-        }
+        // Simple depth selection using TextInputDialog
+        javafx.scene.control.TextInputDialog dialog = new javafx.scene.control.TextInputDialog("1");
+        dialog.setTitle("Select Dungeon Depth");
+        dialog.setHeaderText("🗺️ Enter the Dungeon");
+        dialog.setContentText(message.toString());
 
-        // Selectează primul inamic pentru luptă
-        Inamic currentEnemy = enemies.get(0);
+        dialog.showAndWait().ifPresent(input -> {
+            try {
+                int selectedDepth = Integer.parseInt(input.trim());
+                if (selectedDepth < 1 || selectedDepth > maxDepth) {
+                    DialogHelper.showError("Invalid Depth", "Please select a depth between 1 and " + maxDepth);
+                    return;
+                }
 
-        // Lansează interfața de luptă
-        BattleControllerFX battleController = new BattleControllerFX(stage, hero, currentEnemy,true,1);
-        stage.setScene(battleController.createScene());
+                // Launch dungeon at selected depth
+                com.rpg.dungeon.controller.DungeonController dungeonController =
+                    new com.rpg.dungeon.controller.DungeonController(
+                        stage,
+                        hero,
+                        selectedDepth,
+                        () -> returnToTown()
+                    );
+                stage.setScene(dungeonController.createScene());
+            } catch (NumberFormatException e) {
+                DialogHelper.showError("Invalid Input", "Please enter a valid number!");
+            }
+        });
     }
 
     private void handleSave() {
         SaveLoadControllerFX saveController = new SaveLoadControllerFX(stage, hero);
         stage.setScene(saveController.createScene());
+    }
+
+    private void openOptions() {
+        OptionsController optionsController = new OptionsController(stage, () -> returnToTown());
+        stage.setScene(optionsController.createScene());
     }
 
     private void showStatsDialog() {
@@ -329,7 +372,8 @@ public class TownMenuController {
 
         stats.append("\n💰 RESURSE:\n");
         stats.append("💰 Gold: ").append(hero.getGold()).append("\n");
-        stats.append("🔮 Shards: ").append(hero.getShards()).append("\n");
+        stats.append("🔧 Scrap: ").append(hero.getScrap()).append("\n");
+        stats.append("🎫 Dungeon Tokens: ").append(hero.getDungeonTickets()).append("\n");
 
         if (hero.getStatPointsToAllocate() > 0) {
             stats.append("\n⭐ Stat Points disponibile: ").append(hero.getStatPointsToAllocate()).append("\n");
@@ -418,6 +462,60 @@ public class TownMenuController {
     }
 
 
+    /**
+     * 💎 DEBUG: Quick jewel testing
+     */
+    private void handleJewelTest() {
+        StringBuilder testInfo = new StringBuilder();
+        testInfo.append("═══════════════════════════════════\n");
+        testInfo.append("   💎 JEWEL TEST UTILITY\n");
+        testInfo.append("═══════════════════════════════════\n\n");
+        testInfo.append("This will:\n");
+        testInfo.append("✅ Add 5 test jewels to inventory\n");
+        testInfo.append("✅ Add 5 passive points for socketing\n");
+        testInfo.append("✅ Show jewel inventory stats\n\n");
+        testInfo.append("Current jewels: ").append(hero.getJewelCount()).append("\n");
+        testInfo.append("Passive points: ").append(hero.getPassivePoints()).append("\n\n");
+        testInfo.append("Continue?");
+
+        if (DialogHelper.showConfirmation("Jewel Test Utility", testInfo.toString())) {
+            // Add test jewels
+            JewelTestUtility.addTestJewelsToHero(hero);
+
+            // Add passive points for testing talent tree
+            hero.increasePassivePoints(5);
+
+            // Build result message
+            StringBuilder result = new StringBuilder();
+            result.append("═══════════════════════════════════\n");
+            result.append("   ✅ TEST JEWELS ADDED!\n");
+            result.append("═══════════════════════════════════\n\n");
+            result.append("📊 NEW STATS:\n");
+            result.append("💎 Total Jewels: ").append(hero.getJewelCount()).append("\n");
+            result.append("✅ Available (Unsocketed): ").append(hero.getAvailableJewels().size()).append("\n");
+            result.append("💎 Socketed: ").append(hero.getSocketedJewels().size()).append("\n");
+            result.append("🌳 Passive Points: ").append(hero.getPassivePoints()).append("\n\n");
+
+            result.append("📝 JEWELS ADDED:\n");
+            result.append("🔴 Test Crimson Jewel (STR)\n");
+            result.append("🟢 Test Viridian Jewel (DEX)\n");
+            result.append("🔵 Test Cobalt Jewel (INT)\n");
+            result.append("⚪ Test Prismatic Jewel (Balanced)\n");
+            result.append("🟡 Blood of the Immortal (Legendary)\n\n");
+
+            result.append("💡 NEXT STEPS:\n");
+            result.append("1. Open Talent Tree (🌳)\n");
+            result.append("2. Allocate jewel sockets (purple nodes)\n");
+            result.append("3. Right-click to insert jewels\n");
+            result.append("4. Check stats with jewel bonuses\n");
+
+            DialogHelper.showInfo("Test Complete", result.toString());
+
+            // Refresh the town menu to show updated stats
+            stage.setScene(createScene());
+        }
+    }
+
     private void handleExit() {
         if (DialogHelper.showConfirmation("Confirmare Ieșire",
                 "Vrei să te întorci la meniul principal?\n\n" +
@@ -426,5 +524,26 @@ public class TownMenuController {
             MainMenuController mainMenu = new MainMenuController(stage);
             stage.setScene(mainMenu.createScene());
         }
+    }
+
+
+    /**
+     * Returns to town menu after dungeon
+     */
+    private void returnToTown() {
+        stage.setScene(createScene());
+    }
+
+    /**
+     * 🏛️ Handler pentru Dungeon Upgrades Shop
+     */
+    private void handleDungeonUpgrades() {
+        com.rpg.dungeon.controller.DungeonUpgradeShopController upgradeShop =
+            new com.rpg.dungeon.controller.DungeonUpgradeShopController(
+                stage,
+                hero,
+                () -> returnToTown()
+            );
+        stage.setScene(upgradeShop.createScene());
     }
 }

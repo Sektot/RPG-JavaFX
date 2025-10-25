@@ -1,5 +1,6 @@
 package com.rpg.controller;
 
+import com.rpg.dungeon.model.MultiBattleState;
 import com.rpg.model.characters.Erou;
 import com.rpg.model.characters.Inamic;
 import com.rpg.service.BattleServiceFX;
@@ -29,18 +30,27 @@ import java.util.Map;
 
 /**
  * BattleControllerFX - Controller îmbunătățit pentru lupte
+ * Suportă atât single-enemy cât și multi-enemy battles
  */
 public class BattleControllerFX {
 
     private Stage stage;
     private Erou hero;
-    private Inamic enemy;
+    private Inamic enemy; // For single-enemy battles
     //private Inamic currentEnemy;
     private BattleServiceFX battleService;
+
+    // Multi-enemy battle support
+    private MultiBattleState multiBattleState;
+    private boolean isMultiBattle = false;
+    private Inamic currentTarget; // Current target in multi-enemy battle
 
     // 🆕 ADAUGĂ ACESTEA
     private final boolean inDungeon;
     private int dungeonDepth = 1;
+
+    // 🆕 CALLBACK pentru dungeon system
+    private BattleEndCallback onBattleEndCallback;
 
     // UI Components - Hero
     private Label heroNameLabel;
@@ -54,6 +64,9 @@ public class BattleControllerFX {
     private Label enemyHPLabel;
     private ProgressBar enemyHPBar;
 
+    // UI Components - Multi-Enemy
+    private VBox enemyPanelContainer; // Container for enemy panel (to refresh)
+
     // Battle Log
     private TextArea battleLog;
 
@@ -63,7 +76,7 @@ public class BattleControllerFX {
     private VBox abilityButtonsPanel;
     private VBox potionButtonsPanel;
 
-    // 🆕 CONSTRUCTOR NOU cu support dungeon
+    // 🆕 CONSTRUCTOR NOU cu support dungeon (single enemy)
     public BattleControllerFX(Stage stage, Erou hero, Inamic enemy, boolean inDungeon, int depth) {
         this.stage = stage;
         this.hero = hero;
@@ -71,6 +84,24 @@ public class BattleControllerFX {
         this.inDungeon = inDungeon;
         this.dungeonDepth = depth;
         this.battleService = new BattleServiceFX();
+        this.isMultiBattle = false;
+    }
+
+    // 🆕 CONSTRUCTOR for multi-enemy battles
+    public BattleControllerFX(Stage stage, Erou hero, MultiBattleState battleState, boolean inDungeon, int depth) {
+        this.stage = stage;
+        this.hero = hero;
+        this.multiBattleState = battleState;
+        this.inDungeon = inDungeon;
+        this.dungeonDepth = depth;
+        this.battleService = new BattleServiceFX();
+        this.isMultiBattle = true;
+
+        // Set current target to first enemy
+        if (!battleState.getActiveEnemies().isEmpty()) {
+            this.currentTarget = battleState.getActiveEnemies().get(0);
+            this.enemy = this.currentTarget; // For UI compatibility
+        }
     }
 
     public Scene createScene() {
@@ -97,7 +128,13 @@ public class BattleControllerFX {
         header.setStyle("-fx-background-color: #1a1a2e;");
 
         // 🔄 MODIFICĂ title să includă depth
-        String titleText = "⚔️ LUPTĂ: " + hero.getNume() + " VS " + enemy.getNume();
+        String titleText;
+        if (isMultiBattle && multiBattleState != null) {
+            titleText = "⚔️ MULTI-BATTLE: " + hero.getNume() + " VS " + multiBattleState.getActiveEnemyCount() + " ENEMIES";
+        } else {
+            titleText = "⚔️ LUPTĂ: " + hero.getNume() + " VS " + enemy.getNume();
+        }
+
         if (inDungeon) {
             titleText += " | 🏰 Depth: " + dungeonDepth;
         }
@@ -106,7 +143,7 @@ public class BattleControllerFX {
         Label title = new Label(titleText);
         title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #e94560;");
 
-        if (enemy.isBoss()) {
+        if (enemy != null && enemy.isBoss()) {
             Label bossLabel = new Label("💀 BOSS BATTLE 💀");
             bossLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #ff6b6b;");
             header.getChildren().addAll(title, bossLabel);
@@ -128,9 +165,9 @@ public class BattleControllerFX {
 
         VBox heroPanel = createHeroPanel();
         VBox logPanel = createLogPanel();
-        VBox enemyPanel = createEnemyPanel();
+        enemyPanelContainer = createEnemyPanel(); // Store reference for refreshing
 
-        battleArea.getChildren().addAll(heroPanel, logPanel, enemyPanel);
+        battleArea.getChildren().addAll(heroPanel, logPanel, enemyPanelContainer);
 
         return battleArea;
     }
@@ -182,13 +219,102 @@ public class BattleControllerFX {
                 resourceTextLabel, heroResourceBar, heroResourceLabel
         );
 
+        // Show active run item buffs
+        VBox buffsPanel = createRunItemBuffsPanel();
+        if (buffsPanel != null) {
+            panel.getChildren().add(buffsPanel);
+        }
+
         return panel;
     }
 
     /**
-     * Panel inamic
+     * Creates a panel showing active run item effects
+     */
+    private VBox createRunItemBuffsPanel() {
+        VBox buffsPanel = new VBox(3);
+        buffsPanel.setStyle("-fx-padding: 5; -fx-background-color: rgba(39, 174, 96, 0.1); -fx-background-radius: 5;");
+
+        java.util.List<String> activeEffects = new java.util.ArrayList<>();
+
+        // Damage modifiers
+        if (hero.getRunItemDamageMultiplier() > 1.0) {
+            int percent = (int)((hero.getRunItemDamageMultiplier() - 1.0) * 100);
+            activeEffects.add("⚔️ +" + percent + "% Damage");
+        }
+        if (hero.getRunItemFlatDamage() > 0) {
+            activeEffects.add("⚔️ +" + hero.getRunItemFlatDamage() + " Damage");
+        }
+
+        // Defense modifiers
+        if (hero.getRunItemDefenseMultiplier() > 1.0) {
+            int percent = (int)((hero.getRunItemDefenseMultiplier() - 1.0) * 100);
+            activeEffects.add("🛡️ +" + percent + "% Defense");
+        }
+        if (hero.getRunItemFlatDefense() > 0) {
+            activeEffects.add("🛡️ +" + hero.getRunItemFlatDefense() + " Defense");
+        }
+
+        // Combat modifiers
+        if (hero.getRunItemCritBonus() > 0) {
+            int percent = (int)(hero.getRunItemCritBonus() * 100);
+            activeEffects.add("⚡ +" + percent + "% Crit");
+        }
+        if (hero.getRunItemDodgeBonus() > 0) {
+            int percent = (int)(hero.getRunItemDodgeBonus() * 100);
+            activeEffects.add("💨 +" + percent + "% Dodge");
+        }
+
+        // Special effects
+        if (hero.getRunItemLifesteal() > 0) {
+            int percent = (int)(hero.getRunItemLifesteal() * 100);
+            activeEffects.add("🩸 " + percent + "% Lifesteal");
+        }
+        if (hero.getRunItemRegenPerTurn() > 0) {
+            activeEffects.add("💚 +" + hero.getRunItemRegenPerTurn() + " HP/turn");
+        }
+
+        // Elemental damage
+        java.util.Map<String, Integer> elementalDamage = hero.getRunItemElementalDamageMap();
+        if (!elementalDamage.isEmpty()) {
+            for (java.util.Map.Entry<String, Integer> entry : elementalDamage.entrySet()) {
+                String icon = entry.getKey().equals("fire") ? "🔥" : "❄️";
+                activeEffects.add(icon + " +" + entry.getValue() + " " + entry.getKey());
+            }
+        }
+
+        if (activeEffects.isEmpty()) {
+            return null; // No buffs to display
+        }
+
+        Label buffsTitle = new Label("✨ Active Run Items:");
+        buffsTitle.setStyle("-fx-font-size: 12px; -fx-text-fill: #27ae60; -fx-font-weight: bold;");
+        buffsPanel.getChildren().add(buffsTitle);
+
+        for (String effect : activeEffects) {
+            Label effectLabel = new Label(effect);
+            effectLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: white;");
+            buffsPanel.getChildren().add(effectLabel);
+        }
+
+        return buffsPanel;
+    }
+
+    /**
+     * Panel inamic - supports both single and multi-enemy battles
      */
     private VBox createEnemyPanel() {
+        if (isMultiBattle && multiBattleState != null) {
+            return createMultiEnemyPanel();
+        } else {
+            return createSingleEnemyPanel();
+        }
+    }
+
+    /**
+     * Single enemy panel (original)
+     */
+    private VBox createSingleEnemyPanel() {
         VBox panel = new VBox(10);
         panel.setPadding(new Insets(15));
         panel.setAlignment(Pos.CENTER);
@@ -227,6 +353,139 @@ public class BattleControllerFX {
         );
 
         return panel;
+    }
+
+    /**
+     * Multi-enemy panel showing all 4 slots
+     */
+    private VBox createMultiEnemyPanel() {
+        VBox panel = new VBox(10);
+        panel.setPadding(new Insets(15));
+        panel.setAlignment(Pos.TOP_CENTER);
+        panel.setStyle(
+                "-fx-background-color: #16213e; " +
+                        "-fx-background-radius: 15; " +
+                        "-fx-border-color: #e74c3c; " +
+                        "-fx-border-width: 3; " +
+                        "-fx-border-radius: 15;"
+        );
+        panel.setPrefWidth(350);
+
+        Label titleLabel = new Label("⚔️ ENEMIES (" + multiBattleState.getActiveEnemyCount() + "/4)");
+        titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;");
+        panel.getChildren().add(titleLabel);
+
+        // Create 4 slots
+        for (int i = 0; i < MultiBattleState.MAX_ACTIVE_ENEMIES; i++) {
+            MultiBattleState.BattleSlot slot = multiBattleState.getSlot(i);
+            VBox slotPanel = createEnemySlotPanel(slot, i);
+            panel.getChildren().add(slotPanel);
+        }
+
+        // Reinforcement queue info
+        if (multiBattleState.getReinforcementQueueSize() > 0) {
+            Label queueLabel = new Label("📢 Queue: " + multiBattleState.getReinforcementQueueSize() + " waiting");
+            queueLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #f39c12;");
+            panel.getChildren().add(queueLabel);
+        }
+
+        return panel;
+    }
+
+    /**
+     * Create individual enemy slot panel
+     */
+    private VBox createEnemySlotPanel(MultiBattleState.BattleSlot slot, int slotIndex) {
+        VBox slotPanel = new VBox(5);
+        slotPanel.setPadding(new Insets(8));
+        slotPanel.setAlignment(Pos.CENTER_LEFT);
+
+        if (slot.isActive() && slot.getEnemy() != null && slot.getEnemy().esteViu()) {
+            // Active enemy
+            Inamic enemy = slot.getEnemy();
+            slotPanel.setStyle(
+                    "-fx-background-color: #1a1a2e; " +
+                            "-fx-background-radius: 8; " +
+                            "-fx-border-color: #e74c3c; " +
+                            "-fx-border-width: 2; " +
+                            "-fx-border-radius: 8;"
+            );
+
+            Label nameLabel = new Label("Slot " + (slotIndex + 1) + ": " + enemy.getNume());
+            nameLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;");
+
+            ProgressBar hpBar = new ProgressBar((double) enemy.getViata() / enemy.getViataMaxima());
+            hpBar.setPrefWidth(250);
+            hpBar.setPrefHeight(15);
+            hpBar.setStyle("-fx-accent: #e74c3c;");
+
+            Label hpLabel = new Label(enemy.getViata() + " / " + enemy.getViataMaxima() + " HP");
+            hpLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: white;");
+
+            slotPanel.getChildren().addAll(nameLabel, hpBar, hpLabel);
+
+        } else {
+            // Empty slot - check if reinforcement incoming
+            MultiBattleState.ReinforcementEntry nextReinforcement = multiBattleState.getNextReinforcement();
+
+            if (nextReinforcement != null && multiBattleState.getActiveEnemyCount() < MultiBattleState.MAX_ACTIVE_ENEMIES) {
+                // Show countdown
+                slotPanel.setStyle(
+                        "-fx-background-color: #1a1a2e; " +
+                                "-fx-background-radius: 8; " +
+                                "-fx-border-color: #f39c12; " +
+                                "-fx-border-width: 2; " +
+                                "-fx-border-style: dashed; " +
+                                "-fx-border-radius: 8;"
+                );
+
+                int turnsRemaining = nextReinforcement.getTurnsRemaining(multiBattleState.getCurrentTurn());
+                Label emptyLabel = new Label("Slot " + (slotIndex + 1) + ": EMPTY");
+                emptyLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #95a5a6;");
+
+                Label countdownLabel = new Label("⏰ " + nextReinforcement.getEnemy().getNume() + " arriving in " + turnsRemaining + " turns");
+                countdownLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #f39c12;");
+
+                slotPanel.getChildren().addAll(emptyLabel, countdownLabel);
+            } else {
+                // Completely empty
+                slotPanel.setStyle(
+                        "-fx-background-color: #0f0f1e; " +
+                                "-fx-background-radius: 8; " +
+                                "-fx-border-color: #34495e; " +
+                                "-fx-border-width: 1; " +
+                                "-fx-border-style: dashed; " +
+                                "-fx-border-radius: 8;"
+                );
+
+                Label emptyLabel = new Label("Slot " + (slotIndex + 1) + ": EMPTY");
+                emptyLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #34495e;");
+                slotPanel.getChildren().add(emptyLabel);
+            }
+        }
+
+        return slotPanel;
+    }
+
+    /**
+     * Refresh multi-enemy panel (update HP bars, countdowns, slots)
+     */
+    private void refreshMultiEnemyPanel() {
+        if (!isMultiBattle || multiBattleState == null || enemyPanelContainer == null) {
+            return;
+        }
+
+        // Recreate the multi-enemy panel
+        VBox newPanel = createMultiEnemyPanel();
+
+        // Replace content in container
+        enemyPanelContainer.getChildren().clear();
+        enemyPanelContainer.getChildren().addAll(newPanel.getChildren());
+
+        // Copy styles
+        enemyPanelContainer.setStyle(newPanel.getStyle());
+        enemyPanelContainer.setPadding(newPanel.getPadding());
+        enemyPanelContainer.setAlignment(newPanel.getAlignment());
     }
 
     /**
@@ -351,6 +610,30 @@ public class BattleControllerFX {
     // ==================== BATTLE LOGIC ====================
 
     private void initializeBattle() {
+        // Check if multi-battle or single battle
+        if (isMultiBattle && multiBattleState != null) {
+            // Multi-enemy battle initialization
+            BattleInitDTO initData = battleService.initializeMultiBattle(hero, multiBattleState);
+            updateUI(new AbilityDTO.BattleStateDTO(
+                    initData.getHeroHP(),
+                    initData.getHeroMaxHP(),
+                    initData.getHeroResource(),
+                    initData.getHeroMaxResource(),
+                    initData.getEnemyHP(),
+                    initData.getEnemyMaxHP(),
+                    initData.getAbilities()
+            ));
+
+            battleLog.appendText("⚔️ MULTI-ENEMY BATTLE!\n");
+            battleLog.appendText("Active enemies: " + multiBattleState.getActiveEnemyCount() + "/4\n");
+            if (multiBattleState.getReinforcementQueueSize() > 0) {
+                battleLog.appendText("Reinforcements: " + multiBattleState.getReinforcementQueueSize() + " incoming!\n");
+            }
+            battleLog.appendText("\n");
+            return;
+        }
+
+        // Single enemy battle initialization (original code)
         // 🆕 GENEREAZĂ INAMIC DACĂ LIPSEȘTE (pentru dungeon)
         if (this.enemy == null) {
             EnemyGeneratorRomanesc generator = new EnemyGeneratorRomanesc();
@@ -389,6 +672,23 @@ public class BattleControllerFX {
             addToLog("💀 BOSS BATTLE! Pregătește-te!");
         }
         addToLog("━━━━━━━━━━━━━━━━━━━━━━━");
+    }
+
+    /**
+     * Refresh battle display after revival (restore abilities and update stats)
+     */
+    private void refreshBattleDisplay() {
+        // Re-initialize battle state to get fresh abilities
+        BattleInitDTO initData = battleService.initializeBattle(hero, enemy);
+        updateUI(new AbilityDTO.BattleStateDTO(
+                hero.getViata(),
+                hero.getViataMaxima(),
+                hero.getResursaCurenta(),
+                hero.getResursaMaxima(),
+                enemy.getViata(),
+                enemy.getViataMaxima(),
+                initData.getAbilities()  // Use abilities from re-initialization
+        ));
     }
 
     private void handleNormalAttack() {
@@ -510,6 +810,28 @@ public class BattleControllerFX {
         if (result.isVictory()) {
             showVictoryScreen(result);
         } else {
+            // Hero died - check for shaorma revival
+            if (hero.areShaormaRevival()) {
+                boolean useRevival = DialogHelper.showConfirmation(
+                    "💀 AI MURIT! 💀",
+                    "Vrei să folosești o Șaorma de Revival?\n" +
+                    "🌯 Șaorme disponibile: " + hero.getShaormaRevival() + "\n\n" +
+                    "✅ Da = Reînvie cu 50% HP/Resources\n" +
+                    "❌ Nu = Game Over"
+                );
+
+                if (useRevival && hero.folosesteShaormaRevival()) {
+                    addToLog("🌯✨ ȘAORMA DE REVIVAL ACTIVATĂ! ✨🌯");
+                    addToLog("💚 Te-ai reîntors din tărâmul umbrelor!");
+
+                    // Refresh the battle display after revival
+                    refreshBattleDisplay();
+                    enableAllButtons();
+                    return; // Continue battle
+                }
+            }
+
+            // No shaorma or declined - show defeat
             showDefeatScreen();
         }
     }
@@ -530,6 +852,14 @@ public class BattleControllerFX {
             for (var item : result.getLoot()) {
                 victoryMsg.append("  • ").append(item.getNume()).append(" \n");
             }
+        }
+
+        // 💎 Display jewel drop
+        if (result.hasJewelDrop()) {
+            victoryMsg.append(" \n💎 JEWEL DROP! \n");
+            victoryMsg.append("  • ").append(result.getJewelDrop().getName()).append(" \n");
+            victoryMsg.append("    ").append(result.getJewelDrop().getRarity().getDisplayName());
+            victoryMsg.append(" | ").append(result.getJewelDrop().getModifiers().size()).append(" mods \n");
         }
 
         DialogHelper.showSuccess("Victorie!", victoryMsg.toString());
@@ -580,8 +910,13 @@ public class BattleControllerFX {
             }
         }
 
-        // 🆕 ALEGERI DUPĂ VICTORIE
-        if (inDungeon) {
+        // 💎 Add jewel to inventory
+        if (result.hasJewelDrop()) {
+            hero.addJewel(result.getJewelDrop());
+        }
+
+        // 🆕 ALEGERI DUPĂ VICTORIE (only for old dungeon system without callbacks)
+        if (inDungeon && onBattleEndCallback == null) {
             String depthInfo = dungeonDepth > 1 ? " \n🏰 Depth actual: " + dungeonDepth : "";
             boolean continua = DialogHelper.showConfirmation(
                     "Continuă explorarea?",
@@ -627,18 +962,56 @@ public class BattleControllerFX {
             }
         }
 
+        // 🆕 Dacă avem callback (dungeon mode), apelează-l
+        if (onBattleEndCallback != null) {
+            onBattleEndCallback.onBattleEnd(true, result);
+            return;
+        }
+
         // Default sau alegerea "Cancel": întoarce-te în oraș
         returnToTown();
     }
 
 
     private void showDefeatScreen() {
-        DialogHelper.showError("Înfrângere!", "Ai fost învins! \n💀 Game Over");
-        // Aici poți implementa logica pentru moarte (ex: șaorma revival)
-        returnToTown();
+        // Disable all buttons to prevent further actions
+        disableAllButtons();
+
+        // Build defeat message
+        StringBuilder defeatMsg = new StringBuilder();
+        defeatMsg.append("💀 AI FOST ÎNVINS! 💀\n\n");
+        defeatMsg.append("Ucis de: ").append(enemy.getNume()).append("\n");
+
+        if (inDungeon) {
+            defeatMsg.append("Depth: ").append(dungeonDepth).append("\n");
+        }
+
+        defeatMsg.append("\n⚰️ Game Over\n");
+        defeatMsg.append("Vei fi trimis înapoi în oraș.");
+
+        // Show dialog and wait for user to acknowledge
+        DialogHelper.showError("Înfrângere!", defeatMsg.toString());
+
+        System.out.println("🔴 DEFEAT: Returning to town/dungeon exit. Callback exists: " + (onBattleEndCallback != null));
+
+        // 🆕 Dacă avem callback (dungeon mode), apelează-l
+        if (onBattleEndCallback != null) {
+            System.out.println("🔴 DEFEAT: Calling battle end callback with victory=false");
+            onBattleEndCallback.onBattleEnd(false, null);
+        } else {
+            System.out.println("🔴 DEFEAT: No callback, returning to town directly");
+            // Altfel, întoarce-te în oraș
+            returnToTown();
+        }
     }
 
     private void returnToTown() {
+        // 🆕 Dacă avem callback (dungeon mode), apelează-l pentru victory
+        if (onBattleEndCallback != null) {
+            // This is called from showVictoryScreen, result is passed separately
+            return;
+        }
+
         TownMenuController townController = new TownMenuController(stage, hero);
         stage.setScene(townController.createScene());
     }
@@ -675,10 +1048,17 @@ public class BattleControllerFX {
         heroResourceBar.setProgress(heroResProgress);
 
         // ✅ UPDATE ENEMY cu protecție
-        enemyHPLabel.setText(state.getEnemyHP() + " / " + enemyMaxHP);
-        double enemyHpProgress = Math.min(1.0, Math.max(0.0, (double) state.getEnemyHP() / enemyMaxHP));
-        enemyHPBar.setProgress(enemyHpProgress);
-        animateHealthBar(enemyHPBar);
+        if (enemyHPLabel != null && enemyHPBar != null) {
+            enemyHPLabel.setText(state.getEnemyHP() + " / " + enemyMaxHP);
+            double enemyHpProgress = Math.min(1.0, Math.max(0.0, (double) state.getEnemyHP() / enemyMaxHP));
+            enemyHPBar.setProgress(enemyHpProgress);
+            animateHealthBar(enemyHPBar);
+        }
+
+        // ✅ UPDATE MULTI-ENEMY PANEL (if multi-battle)
+        if (isMultiBattle && multiBattleState != null) {
+            refreshMultiEnemyPanel();
+        }
 
         // ✅ UPDATE ABILITIES și POTIONS cu protecție
         if (state.getAbilities() != null) {
@@ -760,34 +1140,8 @@ public class BattleControllerFX {
 
         // ✅ FOLOSEȘTE isBattleOver() ca în codul existent
         if (result.isBattleOver()) {
-            // Verifică dacă ai șaorme pentru revival
-            if (hero.areShaormaRevival()) {
-                boolean useRevival = DialogHelper.showConfirmation(
-                        "💀 AI MURIT! 💀",
-                        "Vrei să folosești o Șaorma de Revival?\\n" +
-                                "🌯 Șaorme disponibile: " + hero.getShaormaRevival() + "\\n\\n" +
-                                "✅ Da = Reînvie cu 50% HP/Resources\\n" +
-                                "❌ Nu = Game Over"
-                );
-
-                if (useRevival && hero.folosesteShaormaRevival()) {
-                    addToLog("🌯✨ ȘAORMA DE REVIVAL ACTIVATĂ! ✨🌯");
-                    addToLog("💚 Te-ai reîntors din tărâmul umbrelor!");
-
-                    // Update UI după revival
-                    updateUI(new AbilityDTO.BattleStateDTO(
-                            hero.getViata(), hero.getViataMaxima(),
-                            hero.getResursaCurenta(), hero.getResursaMaxima(),
-                            enemy.getViata(), enemy.getViataMaxima(),
-                            new ArrayList<>()
-                    ));
-                    enableAllButtons();
-                    return;
-                }
-            }
-
-            // Nu ai șaorme sau nu vrei să le folosești
-            showDefeatScreen();
+            // Call handleBattleEnd which handles victory/defeat properly
+            handleBattleEnd(result);
         } else {
             // Continuă lupta
             updateUI(result.getCurrentState());
@@ -812,12 +1166,16 @@ public class BattleControllerFX {
     private void disableAllButtons() {
         attackButton.setDisable(true);
         fleeButton.setDisable(true);
-        abilityButtonsPanel.getChildren().forEach(node ->
-                ((Button)node).setDisable(true)
-        );
-        potionButtonsPanel.getChildren().forEach(node ->
-                ((Button)node).setDisable(true)
-        );
+        abilityButtonsPanel.getChildren().forEach(node -> {
+            if (node instanceof Button) {
+                ((Button)node).setDisable(true);
+            }
+        });
+        potionButtonsPanel.getChildren().forEach(node -> {
+            if (node instanceof Button) {
+                ((Button)node).setDisable(true);
+            }
+        });
     }
 
     private void enableAllButtons() {
@@ -831,5 +1189,22 @@ public class BattleControllerFX {
         ft.setFromValue(0.5);
         ft.setToValue(1.0);
         ft.play();
+    }
+
+    // ==================== DUNGEON INTEGRATION ====================
+
+    /**
+     * Callback interface pentru dungeon system
+     */
+    @FunctionalInterface
+    public interface BattleEndCallback {
+        void onBattleEnd(boolean victory, AbilityDTO.BattleResultDTO rewards);
+    }
+
+    /**
+     * Setează callback-ul pentru când se termină bătălia
+     */
+    public void setOnBattleEnd(BattleEndCallback callback) {
+        this.onBattleEndCallback = callback;
     }
 }

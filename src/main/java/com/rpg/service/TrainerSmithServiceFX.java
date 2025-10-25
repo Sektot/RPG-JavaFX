@@ -19,7 +19,7 @@ public class TrainerSmithServiceFX {
     private static final int STAT_POINT_COST = 100; // Cost per punct de stat
     private static final int TRAINING_BASE_COST = 50;
 
-    // Costuri pentru enhancement (exponențial)
+    // Costuri pentru enhancement (exponențial) - in scrap
     private static final int BASE_ENHANCEMENT_COST = 100;
 
     /**
@@ -144,7 +144,7 @@ public class TrainerSmithServiceFX {
     private EnhancementItemDTO createEnhancementItemDTO(ObiectEchipament item, Erou hero) {
         int currentLevel = item.getEnhancementLevel();
         int cost = calculateEnhancementCost(currentLevel);
-        int maxAffordable = calculateMaxAffordableEnhancements(item, hero.getShards());
+        int maxAffordable = calculateMaxAffordableEnhancements(item, hero.getScrap());
 
         Map<String, Integer> currentBonuses = item.getTotalBonuses();
         Map<String, Integer> nextLevelBonuses = simulateEnhancement(item, 1);
@@ -154,7 +154,7 @@ public class TrainerSmithServiceFX {
                 item.getNume(),
                 currentLevel,
                 cost,
-                hero.getShards() >= cost,
+                hero.getScrap() >= cost,
                 maxAffordable,
                 currentBonuses,
                 nextLevelBonuses
@@ -167,10 +167,10 @@ public class TrainerSmithServiceFX {
     public EnhancementResultDTO enhanceItem(Erou hero, ObiectEchipament item) {
         int cost = calculateEnhancementCost(item.getEnhancementLevel());
 
-        if (hero.getShards() < cost) {
+        if (hero.getScrap() < cost) {
             return new EnhancementResultDTO(
                     false,
-                    "Nu ai destule shards! Necesar: " + cost + " shards",
+                    "Nu ai destul scrap! Necesar: " + cost + " scrap",
                     item,
                     item.getEnhancementLevel(),
                     0,
@@ -181,7 +181,7 @@ public class TrainerSmithServiceFX {
         int oldLevel = item.getEnhancementLevel();
         Map<String, Integer> oldBonuses = new HashMap<>(item.getTotalBonuses());
 
-        hero.consumeShards(cost);
+        hero.consumeScrap(cost);
         item.enhanceEquipment(1);
 
         int newLevel = item.getEnhancementLevel();
@@ -198,15 +198,15 @@ public class TrainerSmithServiceFX {
     }
 
     /**
-     * Îmbunătățește la maxim (cât permit shards-urile)
+     * Îmbunătățește la maxim (cât permite scrap-ul)
      */
     public EnhancementResultDTO enhanceItemMax(Erou hero, ObiectEchipament item) {
-        int maxLevels = calculateMaxAffordableEnhancements(item, hero.getShards());
+        int maxLevels = calculateMaxAffordableEnhancements(item, hero.getScrap());
 
         if (maxLevels <= 0) {
             return new EnhancementResultDTO(
                     false,
-                    "Nu ai destule shards pentru niciun enhancement!",
+                    "Nu ai destul scrap pentru niciun enhancement!",
                     item,
                     item.getEnhancementLevel(),
                     0,
@@ -220,7 +220,7 @@ public class TrainerSmithServiceFX {
 
         for (int i = 0; i < maxLevels; i++) {
             int cost = calculateEnhancementCost(item.getEnhancementLevel());
-            hero.consumeShards(cost);
+            hero.consumeScrap(cost);
             item.enhanceEquipment(1);
             totalCost += cost;
         }
@@ -273,11 +273,11 @@ public class TrainerSmithServiceFX {
     }
 
     /**
-     * Informații despre Smith (shards disponibile, scrolluri, etc)
+     * Informații despre Smith (scrap disponibil, scrolluri, etc)
      */
     public SmithInfoDTO getSmithInfo(Erou hero) {
         return new SmithInfoDTO(
-                hero.getShards(),
+                hero.getScrap(),
                 hero.getInventar().getEnchantScrolls().size(),
                 getEnhanceableItems(hero).size()
         );

@@ -83,7 +83,7 @@ public class PotionUpgradeService {
         System.out.println(" 🧙‍♂️ ALCHEMY WORKSHOP - POTION UPGRADES");
         System.out.println("═".repeat(60));
         System.out.printf("👤 %s | 💰 Gold: %d | 🔮 Shards: %d\n",
-                erou.getNume(), erou.getGold(), erou.getShards());
+                erou.getNume(), erou.getGold(), erou.getScrap());
 
         // Afișează Flask Pieces disponibile
         System.out.println("\n🧪 FLASK PIECES DISPONIBILE:");

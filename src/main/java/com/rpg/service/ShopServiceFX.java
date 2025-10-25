@@ -3,6 +3,7 @@ package com.rpg.service;
 import com.rpg.model.characters.Erou;
 import com.rpg.model.items.BuffPotion;
 import com.rpg.model.items.EnchantScroll;
+import com.rpg.model.items.Jewel;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.dto.PurchaseResult;
 import com.rpg.service.dto.ShopItemDTO;
@@ -36,6 +37,7 @@ public class ShopServiceFX {
         POTIUNI("🧪 Poțiuni de Vindecare"),
         BUFF_POTIUNI("💪 Poțiuni de Buff"),
         ECHIPAMENT("⚔️ Echipament"),
+        JEWELS("💎 Bijuterii (Jewels)"),  // 💎 NEW
         CONSUMABILE("🎁 Consumabile Speciale"),
         PACK_URI("📦 Pack-uri Combo");
 
@@ -56,6 +58,7 @@ public class ShopServiceFX {
     public void forceRestock() {
         // 1) golește cache-ul de sample-uri
         generatedSamples.clear();
+        generatedJewels.clear();  // 💎 Clear jewel cache
 
         // 2) reinitializează stocul pentru itemele de bază
         // poți personaliza aceste id-uri în funcție de ce generezi în getShopItems
@@ -68,6 +71,9 @@ public class ShopServiceFX {
         restockCycle++;
     }
 
+    // 💎 Cache for generated jewels
+    private final Map<String, Jewel> generatedJewels = new HashMap<>();
+
     /**
      * Returnează toate produsele disponibile pentru o categorie
      */
@@ -76,49 +82,59 @@ public class ShopServiceFX {
             case POTIUNI -> getHealingPotions();
             case BUFF_POTIUNI -> getBuffPotions();
             case ECHIPAMENT -> getEquipment(heroLevel);
+            case JEWELS -> getJewels(heroLevel);  // 💎 NEW
             case CONSUMABILE -> getSpecialConsumables();
             case PACK_URI -> getPacks();
         };
     }
 
     /**
-     * Poțiuni de vindecare
+     * Poțiuni de vindecare și mana pentru battle
      */
     private List<ShopItemDTO> getHealingPotions() {
         List<ShopItemDTO> items = new ArrayList<>();
 
         items.add(new ShopItemDTO(
-                "potiune_mica",
-                "🧪 Poțiune Mică",
-                "Restabilește 50 HP",
+                "health_potion",
+                "🧪 Health Potion (Berice)",
+                "Folosită în luptă pentru vindecare\\nCantitate vindecată depinde de upgrade-uri",
+                20,
+                ShopCategory.POTIUNI,
+                1
+        ));
+
+        items.add(new ShopItemDTO(
+                "mana_potion",
+                "💙 Mana Potion (Energizant)",
+                "Folosită în luptă pentru restore resurse\\nCantitate restore depinde de upgrade-uri",
                 15,
                 ShopCategory.POTIUNI,
                 1
         ));
 
         items.add(new ShopItemDTO(
-                "potiune_medie",
-                "🧪 Poțiune Medie",
-                "Restabilește 100 HP",
-                25,
-                ShopCategory.POTIUNI,
-                1
-        ));
-
-        items.add(new ShopItemDTO(
-                "potiune_mare",
-                "🧪 Poțiune Mare",
-                "Restabilește 200 HP",
-                45,
-                ShopCategory.POTIUNI,
-                1
-        ));
-
-        items.add(new ShopItemDTO(
-                "potiune_maxima",
-                "🧪 Poțiune Maximă",
-                "Restabilește 500 HP",
+                "health_potion_5",
+                "🧪 Health Potions x5",
+                "Pack de 5 Health Potions",
                 90,
+                ShopCategory.POTIUNI,
+                5
+        ));
+
+        items.add(new ShopItemDTO(
+                "mana_potion_5",
+                "💙 Mana Potions x5",
+                "Pack de 5 Mana Potions",
+                65,
+                ShopCategory.POTIUNI,
+                5
+        ));
+
+        items.add(new ShopItemDTO(
+                "combo_pack",
+                "🎁 Combo Pack",
+                "3x Health + 3x Mana Potions",
+                100,
                 ShopCategory.POTIUNI,
                 1
         ));
@@ -516,6 +532,51 @@ public class ShopServiceFX {
     }
 
     /**
+     * 💎 Jewels for talent tree sockets
+     */
+    private List<ShopItemDTO> getJewels(int heroLevel) {
+        List<ShopItemDTO> items = new ArrayList<>();
+
+        // Generate 5-8 random jewels for the shop
+        int jewelCount = 5 + (int)(Math.random() * 4);
+        List<Jewel> shopJewels = JewelGeneratorService.generateShopInventory(heroLevel, jewelCount);
+
+        for (Jewel jewel : shopJewels) {
+            String jewelId = "jewel_" + jewel.getName().replaceAll("\\s+", "_");
+
+            // Cache the jewel so we can retrieve it when purchased
+            generatedJewels.put(jewelId, jewel);
+
+            // Build description
+            StringBuilder desc = new StringBuilder();
+            desc.append(jewel.getType().getDisplayName()).append(" | ");
+            desc.append(jewel.getRarity().getDisplayName()).append("\n");
+            desc.append("Level ").append(jewel.getRequiredLevel()).append(" | ");
+            desc.append(jewel.getModifiers().size()).append(" modifiers\n\n");
+
+            // Add modifier preview
+            String[] modLines = jewel.getModifiersDescription().split("\n");
+            for (int i = 0; i < Math.min(3, modLines.length); i++) {
+                desc.append(modLines[i]).append("\n");
+            }
+            if (modLines.length > 3) {
+                desc.append("... and ").append(modLines.length - 3).append(" more");
+            }
+
+            items.add(new ShopItemDTO(
+                    jewelId,
+                    jewel.getType().getIcon() + " " + jewel.getName(),
+                    desc.toString(),
+                    jewel.getPrice(),
+                    ShopCategory.JEWELS,
+                    1  // Limited stock - only 1 of each jewel
+            ));
+        }
+
+        return items;
+    }
+
+    /**
      * Consumabile speciale
      */
     private List<ShopItemDTO> getSpecialConsumables() {
@@ -613,19 +674,22 @@ public class ShopServiceFX {
     private boolean addItemToHero(Erou erou, ShopItemDTO item, int quantity) {
         String itemId = item.getId();
 
-        // Poțiuni de vindecare
-        if (itemId.startsWith("potiune_")) {
-            int healAmount = switch (itemId) {
-                case "potiune_mica" -> 50;
-                case "potiune_medie" -> 100;
-                case "potiune_mare" -> 200;
-                case "potiune_maxima" -> 500;
-                default -> 0;
-            };
+        // Poțiuni de battle (Health and Mana)
+        if (itemId.equals("health_potion") || itemId.equals("health_potion_5")) {
+            int amount = itemId.equals("health_potion_5") ? 5 : 1;
+            erou.adaugaHealthPotions(amount * quantity);
+            return true;
+        }
 
-            for (int i = 0; i < quantity; i++) {
-                erou.addHealthPotion(healAmount);
-            }
+        if (itemId.equals("mana_potion") || itemId.equals("mana_potion_5")) {
+            int amount = itemId.equals("mana_potion_5") ? 5 : 1;
+            erou.adaugaManaPotions(amount * quantity);
+            return true;
+        }
+
+        if (itemId.equals("combo_pack")) {
+            erou.adaugaHealthPotions(3 * quantity);
+            erou.adaugaManaPotions(3 * quantity);
             return true;
         }
 
@@ -645,6 +709,23 @@ public class ShopServiceFX {
                 erou.addBuffPotion(buffType, quantity);
                 return true;
             }
+        }
+
+        // 💎 Jewels from cache
+        if (itemId.startsWith("jewel_")) {
+            for (int i = 0; i < quantity; i++) {
+                Jewel storedJewel = generatedJewels.get(itemId);
+
+                if (storedJewel != null) {
+                    Jewel shopJewel = storedJewel.createCopy();
+                    erou.addJewel(shopJewel);
+                    System.out.printf("💎 Sold jewel: %s\n", shopJewel.getName());
+                } else {
+                    System.out.printf("⚠️ No jewel found for %s\n", itemId);
+                    return false;
+                }
+            }
+            return true;
         }
 
 // ✅ Echipament din cache - toate tipurile
@@ -817,6 +898,26 @@ public class ShopServiceFX {
      */
     public boolean canAfford(Erou erou, ShopItemDTO item, int quantity) {
         return erou.getGold() >= (item.getPrice() * quantity);
+    }
+
+    /**
+     * 💎 Gets a jewel from the shop cache and adds it to hero inventory
+     * Does NOT handle gold - for use in trade systems that handle gold separately
+     */
+    public boolean addJewelToHero(Erou erou, String jewelId) {
+        if (jewelId.startsWith("jewel_")) {
+            Jewel storedJewel = generatedJewels.get(jewelId);
+            if (storedJewel != null) {
+                Jewel shopJewel = storedJewel.createCopy();
+                erou.addJewel(shopJewel);
+                System.out.printf("💎 Added jewel to hero: %s\n", shopJewel.getName());
+                return true;
+            } else {
+                System.out.printf("⚠️ No jewel found for %s\n", jewelId);
+                return false;
+            }
+        }
+        return false;
     }
 
     /**
