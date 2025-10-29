@@ -133,18 +133,62 @@ public class CharacterSheetController {
                     super.updateItem(item, empty);
                     if (empty || item == null) {
                         setText(null);
+                        setGraphic(null);
                         setTooltip(null);
                         setStyle("");
                     } else {
-                        setText(item.getName());
+                        setText(null); // Clear text, we'll use graphic instead
+
+                        String textColor = "#FFFFFF"; // Default white
 
                         if (item.getEquipment() != null) {
-                            Tooltip tooltip = createItemTooltip(item.getEquipment());
+                            ObiectEchipament equipment = item.getEquipment();
+
+                            // Check level requirement
+                            boolean canEquip = hero.getNivel() >= equipment.getNivelNecesar();
+
+                            // Set color: red if level too low, otherwise rarity color
+                            if (!canEquip) {
+                                textColor = "#FF4444"; // Red for insufficient level
+                            } else {
+                                textColor = getRarityColor(equipment.getRaritate());
+                            }
+
+                            // Create VBox for item display
+                            VBox itemBox = new VBox(2);
+
+                            // First line: Icon + Name
+                            Label nameLabel = new Label(equipment.getTip().getIcon() + " " + item.getName());
+                            nameLabel.setStyle("-fx-text-fill: " + textColor + "; -fx-font-size: 13px; -fx-font-weight: bold;");
+
+                            // Second line: Type | Rarity (or level requirement if too low)
+                            String secondLine;
+                            if (!canEquip) {
+                                secondLine = "   ⚠ Requires Level " + equipment.getNivelNecesar() +
+                                           " | " + equipment.getTip().getDisplayName();
+                            } else {
+                                secondLine = "   " + equipment.getTip().getDisplayName() +
+                                           " | " + equipment.getRaritate().getDisplayName();
+                            }
+
+                            Label infoLabel = new Label(secondLine);
+                            infoLabel.setStyle("-fx-text-fill: " + textColor + "; -fx-font-size: 11px;");
+
+                            itemBox.getChildren().addAll(nameLabel, infoLabel);
+                            setGraphic(itemBox);
+
+                            // Create tooltip
+                            Tooltip tooltip = createItemTooltip(equipment);
                             setTooltip(tooltip);
+                        } else {
+                            // Non-equipment item (potions, etc.)
+                            Label simpleLabel = new Label(item.getName());
+                            simpleLabel.setStyle("-fx-text-fill: " + textColor + "; -fx-font-size: 13px;");
+                            setGraphic(simpleLabel);
                         }
 
-                        // ✅ STIL NORMAL - text alb pe fundal transparent
-                        setStyle("-fx-text-fill: white; -fx-background-color: transparent;");
+                        // ✅ Apply background style
+                        setStyle("-fx-background-color: transparent;");
                     }
                 }
             };
@@ -167,15 +211,15 @@ public class CharacterSheetController {
             // ✅ HOVER EFFECTS cu culori corecte
             cell.setOnMouseEntered(e -> {
                 if (cell.getItem() != null) {
-                    // Fundal gri închis cu text alb - vizibil!
-                    cell.setStyle("-fx-background-color: #34495e; -fx-text-fill: white;");
+                    // Fundal gri închis on hover
+                    cell.setStyle("-fx-background-color: #34495e;");
                 }
             });
 
             cell.setOnMouseExited(e -> {
                 if (cell.getItem() != null) {
-                    // Înapoi la normal - fundal transparent cu text alb
-                    cell.setStyle("-fx-text-fill: white; -fx-background-color: transparent;");
+                    // Înapoi la normal - fundal transparent
+                    cell.setStyle("-fx-background-color: transparent;");
                 }
             });
 
@@ -596,6 +640,19 @@ public class CharacterSheetController {
     /**
      * 📋 Creează tooltip cu statistici și COMPARAȚIE pentru item
      */
+    /**
+     * 🎨 Get color for item rarity
+     */
+    private String getRarityColor(ObiectEchipament.Raritate rarity) {
+        return switch (rarity) {
+            case COMMON -> "#FFFFFF";      // White
+            case UNCOMMON -> "#1EFF00";    // Green
+            case RARE -> "#0070DD";        // Blue
+            case EPIC -> "#A335EE";        // Purple
+            case LEGENDARY -> "#FF8000";   // Orange
+        };
+    }
+
     /**
      * 📋 Creează tooltip cu statistici și COMPARAȚIE pentru item
      */

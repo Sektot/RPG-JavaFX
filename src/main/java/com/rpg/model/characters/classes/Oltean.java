@@ -43,69 +43,118 @@ public class Oltean extends com.rpg.model.characters.Erou implements Serializabl
     public void initializeazaAbilitati() {
         abilitati.clear();
 
-        // 1.quick strike
-        Abilitate rapid = new Abilitate("Lovitură Rapidă", 15, Arrays.asList("physical"), 10, 0, 90,
-                Map.of("dexterity", 1.3), null, 0, 0);
+        // ==================== BASIC ABILITIES (Level 1) ====================
+
+        // 1. 🗡️ Lovitură Rapidă - Basic combo builder (generates energy)
+        Abilitate rapid = new Abilitate("Lovitură Rapidă", 12, Arrays.asList("physical"), 15, 0, 92,
+                Map.of("dexterity", 1.2), null, 0, 0);
+        rapid.setAbilityType(AbilityType.OFFENSIVE)
+                .setRequiredLevel(1)
+                .setResourceGenerated(20);  // Generates 20 Energy
         abilitati.add(rapid);
 
-        // 2.backstab
-        Abilitate spate = new Abilitate("Înjunghiere pe la Spate", 22, Arrays.asList("physical"), 18, 1, 88,
-                Map.of("dexterity", 1.8), null, 0, 0);
-        abilitati.add(spate);
+        // 2. 🔪 Înjunghiere - Backstab with high crit chance
+        Abilitate injung = new Abilitate("Înjunghiere", 22, Arrays.asList("physical"), 25, 1, 88,
+                Map.of("dexterity", 1.7), null, 0, 0);
+        injung.setAbilityType(AbilityType.OFFENSIVE)
+                .setRequiredLevel(1);
+        abilitati.add(injung);
 
-        // 3. stealth
-        Abilitate ascuns = new Abilitate("Ascuns în Umbră", 0, Arrays.asList("special"), 25, 3, 100,
+        // 3. 👤 Ascuns în Umbră - Stealth mode (dodge + crit boost)
+        Abilitate ascuns = new Abilitate("Ascuns în Umbră", 0, Arrays.asList("special"), 30, 3, 100,
                 Map.of("dexterity", 0.3), null, 0, 0);
-        ascuns.setBuff("Ascuns", 3, Map.of("dodge_chance", 1.5, "crit_chance", 1.4));
+        ascuns.setAbilityType(AbilityType.BUFF)
+                .setRequiredLevel(1)
+                .setBuff("Ascuns", 3, Map.of("dodge_chance", 1.6, "crit_chance", 1.5));
         abilitati.add(ascuns);
     }
 
     @Override
     public Abilitate abilitateSpecialaNivel(int nivel) {
         return switch (nivel) {
+            case 3 -> {
+                // 🩸 Sângerare - Bleed damage finisher
+                Abilitate sang = new Abilitate("Sângerare", 28, Arrays.asList("physical"), 30, 2, 90,
+                        Map.of("dexterity", 1.8), "Bleed", 3, 6);
+                sang.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(3);
+                yield sang;
+            }
+
             case 5 -> {
-                //poison blade
-                Abilitate otrava = new Abilitate("Cuțit Otrăvit", 12, Arrays.asList("physical"), 20, 2, 85,
-                        Map.of("dexterity", 1.2), "Poison", 3, 4);
+                // ☠️ Lamă Otrăvită - Poison application
+                Abilitate otrava = new Abilitate("Lamă Otrăvită", 18, Arrays.asList("physical", "poison"), 25, 2, 88,
+                        Map.of("dexterity", 1.4), "Poison", 4, 5);
+                otrava.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(5)
+                        .setResourceGenerated(15);  // Generates 15 Energy
                 yield otrava;
             }
 
-            case 10 -> {
-                //  shadow step
-                Abilitate umbre = new Abilitate("Umbre prin Noapte", 8, Arrays.asList("special"), 30, 4, 100,
-                        Map.of("dexterity", 0.8), null, 0, 0);
-                umbre.setBuff("UmbrePrinNoapte", 2, Map.of("dodge_chance", 1.8, "movement_speed", 1.5));
-                yield umbre;
+            case 8 -> {
+                // ⚡ Viteză Mortală - Attack speed burst
+                Abilitate viteza = new Abilitate("Viteză Mortală", 0, Arrays.asList("special"), 40, 4, 100,
+                        Map.of("dexterity", 0.5), null, 0, 0);
+                viteza.setAbilityType(AbilityType.BUFF)
+                        .setRequiredLevel(8)
+                        .setBuff("VitezaMortala", 3, Map.of("dexterity", 1.4, "attack_speed", 1.6, "crit_chance", 1.3));
+                yield viteza;
             }
 
-            case 15 -> {
-                //  dual strike
-                Abilitate dubla = new Abilitate("Dublă Lovitură", 18, Arrays.asList("physical"), 35, 2, 82,
-                        Map.of("dexterity", 1.6), null, 0, 0);
+            case 10 -> {
+                // 🗡️🗡️ Lovitură Dublă - Two-hit combo
+                Abilitate dubla = new Abilitate("Lovitură Dublă", 20, Arrays.asList("physical"), 35, 2, 87,
+                        Map.of("dexterity", 1.5), null, 0, 0);
+                dubla.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(10)
+                        .setNumberOfHits(2);  // Hits twice
                 yield dubla;
             }
 
+            case 15 -> {
+                // 🌪️ Vârtej de Lame - Blade flurry AOE
+                Abilitate vartej = new Abilitate("Vârtej de Lame", 25, Arrays.asList("physical"), 50, 3, 85,
+                        Map.of("dexterity", 1.6), null, 0, 0);
+                vartej.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(15)
+                        .setAOE(true)
+                        .setNumberOfHits(4);  // Hits 4 times
+                yield vartej;
+            }
+
             case 20 -> {
-                //smoke bomb
-                Abilitate fum = new Abilitate("Bomba de Fum", 0, Arrays.asList("special"), 40, 5, 100,
-                        Map.of("dexterity", 0.4), "Blind", 2, 0);
-                fum.setBuff("BombaDeFum", 4, Map.of("dodge_chance", 2.0, "stealth_bonus", 1.3));
-                yield fum;
+                // 💨 Dispariție - Vanish (massive dodge + heal)
+                Abilitate dispari = new Abilitate("Dispariție", 0, Arrays.asList("special"), 45, 5, 100,
+                        Map.of("dexterity", 0.4), null, 0, 0);
+                dispari.setAbilityType(AbilityType.BUFF)
+                        .setRequiredLevel(20)
+                        .setHealPercent(0.20)  // Heals 20% max HP
+                        .setBuff("Disparitie", 3, Map.of("dodge_chance", 2.5, "stealth_bonus", 1.8));
+                yield dispari;
             }
 
             case 25 -> {
-                //   assassinate
-                Abilitate asasinat = new Abilitate("Cutit la Jugulara", 60, Arrays.asList("physical"), 50, 3, 75,
-                        Map.of("dexterity", 2.8), "DeepWound", 4, 8);
+                // 💀 Asasinare - Combo finisher (massive damage after stealth)
+                Abilitate asasinat = new Abilitate("Asasinare", 70, Arrays.asList("physical"), 60, 3, 92,
+                        Map.of("dexterity", 3.0), "DeepWound", 4, 10);
+                asasinat.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(25)
+                        .setComboRequirement("Ascuns în Umbră")  // Must use stealth first
+                        .setComboBonusDamage(0.75);  // +75% damage if combo'd from stealth!
                 yield asasinat;
             }
 
             case 30 -> {
-                // shadow clone
-                Abilitate clona = new Abilitate("Clona de Umbră", 25, Arrays.asList("special"), 60, 8, 85,
-                        Map.of("dexterity", 1.5), null, 0, 0);
-                clona.setBuff("ClonaDUmbra", 5, Map.of("attack_speed", 2.0, "crit_chance", 1.6));
-                yield clona;
+                // 👥 ULTIMATE: Dans al Umbrelor - Shadow dance ultimate
+                Abilitate ult = new Abilitate("Dans al Umbrelor", 45, Arrays.asList("physical", "shadow", "legendary"), 100, 10, 95,
+                        Map.of("dexterity", 2.5), "Bleed", 5, 15);
+                ult.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(30)
+                        .setUltimate(true)
+                        .setNumberOfHits(8)  // Hits 8 times!
+                        .setHealPercent(0.30)  // Heals 30% max HP (lifesteal theme)
+                        .setBuff("DansUmbrelor", 4, Map.of("dexterity", 1.8, "crit_chance", 1.7, "dodge_chance", 1.6));
+                yield ult;
             }
 
             default -> null;

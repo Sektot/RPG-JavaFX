@@ -9,14 +9,15 @@ import com.rpg.service.EnemyGeneratorRomanesc;
 import com.rpg.service.JewelTestUtility;
 import com.rpg.service.SaveLoadServiceFX;
 import com.rpg.utils.DialogHelper;
+import com.rpg.utils.SpriteManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
 import java.util.HashMap;
@@ -25,6 +26,22 @@ import java.util.Map;
 
 /**
  * TownMenuController - Versiune Finală cu toate serviciile FX
+ *
+ * 🎨 SPRITE SUPPORT:
+ * Place UI sprites in: resources/sprites/ui/town_menu/
+ * - background.png - Town menu background
+ * - header_bg.png - Header background
+ * - menu_bg.png - Menu panel background
+ * - button_dungeon.png / button_dungeon_hover.png
+ * - button_shop.png / button_shop_hover.png
+ * - button_smith.png / button_smith_hover.png
+ * - button_alchemy.png / button_alchemy_hover.png
+ * - button_tavern.png / button_tavern_hover.png
+ * - button_character.png / button_character_hover.png
+ * - button_save.png / button_save_hover.png
+ * - button_options.png / button_options_hover.png
+ * - button_exit.png / button_exit_hover.png
+ * - panel_frame.png - Optional frame decoration
  */
 public class TownMenuController {
 
@@ -34,20 +51,78 @@ public class TownMenuController {
     private EnemyGeneratorRomanesc enemyGenerator;
     private SaveLoadServiceFX saveLoadService;
 
+    // 🎨 UI Textures
+    private Image backgroundTexture;
+    private Image headerBgTexture;
+    private Image menuBgTexture;
+    private Image panelFrameTexture;
+    private Map<String, Image> buttonTextures;
+    private Map<String, Image> buttonHoverTextures;
+
     public TownMenuController(Stage stage, Erou hero) {
         this.stage = stage;
         this.hero = hero;
         this.dungeonService = new DungeonServiceFX();
         this.enemyGenerator = new EnemyGeneratorRomanesc();
         this.saveLoadService = new SaveLoadServiceFX();
+        loadTextures();
+    }
+
+    /**
+     * 🎨 Load all UI textures
+     */
+    private void loadTextures() {
+        backgroundTexture = SpriteManager.getSprite("ui/town_menu", "background");
+        headerBgTexture = SpriteManager.getSprite("ui/town_menu", "header_bg");
+        menuBgTexture = SpriteManager.getSprite("ui/town_menu", "menu_bg");
+        panelFrameTexture = SpriteManager.getSprite("ui/town_menu", "panel_frame");
+
+        // Load button textures
+        buttonTextures = new HashMap<>();
+        buttonHoverTextures = new HashMap<>();
+
+        String[] buttonTypes = {
+            "dungeon", "shop", "smith", "alchemy", "tavern",
+            "character", "save", "options", "exit"
+        };
+
+        for (String type : buttonTypes) {
+            buttonTextures.put(type, SpriteManager.getSprite("ui/town_menu", "button_" + type));
+            buttonHoverTextures.put(type, SpriteManager.getSprite("ui/town_menu", "button_" + type + "_hover"));
+        }
     }
 
     public Scene createScene() {
+        // 🎨 Use StackPane to layer background texture
+        StackPane mainContainer = new StackPane();
+
+        // Add background if available
+        if (backgroundTexture != null) {
+            ImageView backgroundView = new ImageView(backgroundTexture);
+            backgroundView.setPreserveRatio(false);
+            mainContainer.getChildren().add(backgroundView);
+
+            // Bind background size to scene
+            Scene scene = new Scene(mainContainer, 900, 700);
+            backgroundView.fitWidthProperty().bind(scene.widthProperty());
+            backgroundView.fitHeightProperty().bind(scene.heightProperty());
+        }
+
         BorderPane root = new BorderPane();
         root.setTop(createHeroInfo());
         root.setCenter(createMenu());
-        root.setStyle("-fx-background-color: #2c3e50;");
-        return new Scene(root, 900, 700);
+
+        // Only use solid color if no background texture
+        if (backgroundTexture == null) {
+            root.setStyle("-fx-background-color: #2c3e50;");
+        } else {
+            root.setStyle("-fx-background-color: transparent;");
+        }
+
+        mainContainer.getChildren().add(root);
+
+        Scene scene = new Scene(mainContainer, 900, 700);
+        return scene;
     }
 
     /**
@@ -171,42 +246,103 @@ public class TownMenuController {
         return menu;
     }
 
-    private Button createMenuButton(String text, String color) {
+    /**
+     * 🎨 Create menu button with texture support
+     * @param text Button text
+     * @param color Fallback color if no texture
+     * @param textureKey Key for button texture (e.g., "dungeon", "shop")
+     */
+    private Button createMenuButton(String text, String color, String textureKey) {
         Button btn = new Button(text);
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setPrefHeight(50);
-        btn.setStyle(
-                "-fx-font-size: 16px; " +
-                        "-fx-font-weight: bold; " +
-                        "-fx-background-color: " + color + "; " +
-                        "-fx-text-fill: white; " +
-                        "-fx-background-radius: 10; " +
-                        "-fx-cursor: hand;"
-        );
 
-        btn.setOnMouseEntered(e ->
-                btn.setStyle(
-                        "-fx-font-size: 16px; " +
-                                "-fx-font-weight: bold; " +
-                                "-fx-background-color: derive(" + color + ", 20%); " +
-                                "-fx-text-fill: white; " +
-                                "-fx-background-radius: 10; " +
-                                "-fx-cursor: hand;"
-                )
-        );
+        // Check for texture
+        Image normalTexture = buttonTextures.get(textureKey);
+        Image hoverTexture = buttonHoverTextures.get(textureKey);
 
-        btn.setOnMouseExited(e ->
-                btn.setStyle(
-                        "-fx-font-size: 16px; " +
-                                "-fx-font-weight: bold; " +
-                                "-fx-background-color: " + color + "; " +
-                                "-fx-text-fill: white; " +
-                                "-fx-background-radius: 10; " +
-                                "-fx-cursor: hand;"
-                )
-        );
+        if (normalTexture != null && hoverTexture != null) {
+            // Use texture-based styling
+            String normalStyle = String.format(
+                    "-fx-font-size: 16px; " +
+                    "-fx-font-weight: bold; " +
+                    "-fx-text-fill: white; " +
+                    "-fx-background-image: url('%s'); " +
+                    "-fx-background-size: cover; " +
+                    "-fx-background-repeat: no-repeat; " +
+                    "-fx-cursor: hand; " +
+                    "-fx-border-width: 0; " +
+                    "-fx-effect: dropshadow(gaussian, black, 3, 0, 0, 2);",
+                    normalTexture.getUrl()
+            );
+
+            String hoverStyle = String.format(
+                    "-fx-font-size: 16px; " +
+                    "-fx-font-weight: bold; " +
+                    "-fx-text-fill: white; " +
+                    "-fx-background-image: url('%s'); " +
+                    "-fx-background-size: cover; " +
+                    "-fx-background-repeat: no-repeat; " +
+                    "-fx-cursor: hand; " +
+                    "-fx-border-width: 0; " +
+                    "-fx-effect: dropshadow(gaussian, rgba(255,255,255,0.3), 5, 0, 0, 0);",
+                    hoverTexture.getUrl()
+            );
+
+            btn.setStyle(normalStyle);
+            btn.setOnMouseEntered(e -> btn.setStyle(hoverStyle));
+            btn.setOnMouseExited(e -> btn.setStyle(normalStyle));
+
+        } else {
+            // Fallback to color-based styling
+            String normalStyle =
+                    "-fx-font-size: 16px; " +
+                    "-fx-font-weight: bold; " +
+                    "-fx-background-color: " + color + "; " +
+                    "-fx-text-fill: white; " +
+                    "-fx-background-radius: 10; " +
+                    "-fx-cursor: hand;";
+
+            String hoverStyle =
+                    "-fx-font-size: 16px; " +
+                    "-fx-font-weight: bold; " +
+                    "-fx-background-color: derive(" + color + ", 20%); " +
+                    "-fx-text-fill: white; " +
+                    "-fx-background-radius: 10; " +
+                    "-fx-cursor: hand;";
+
+            btn.setStyle(normalStyle);
+            btn.setOnMouseEntered(e -> btn.setStyle(hoverStyle));
+            btn.setOnMouseExited(e -> btn.setStyle(normalStyle));
+        }
 
         return btn;
+    }
+
+    /**
+     * Legacy method for backward compatibility
+     */
+    private Button createMenuButton(String text, String color) {
+        // Extract button type from text for texture lookup
+        String textureKey = extractTextureKey(text);
+        return createMenuButton(text, color, textureKey);
+    }
+
+    /**
+     * Extract texture key from button text
+     */
+    private String extractTextureKey(String text) {
+        String lowerText = text.toLowerCase();
+        if (lowerText.contains("dungeon")) return "dungeon";
+        if (lowerText.contains("shop")) return "shop";
+        if (lowerText.contains("fier") || lowerText.contains("smith")) return "smith";
+        if (lowerText.contains("alchemy") || lowerText.contains("alchim")) return "alchemy";
+        if (lowerText.contains("taver")) return "tavern";
+        if (lowerText.contains("character") || lowerText.contains("personaj")) return "character";
+        if (lowerText.contains("salv") || lowerText.contains("save")) return "save";
+        if (lowerText.contains("op") || lowerText.contains("settings")) return "options";
+        if (lowerText.contains("exit") || lowerText.contains("meniu") || lowerText.contains("înapoi")) return "exit";
+        return "default";
     }
 
     // ==================== HANDLERS ====================

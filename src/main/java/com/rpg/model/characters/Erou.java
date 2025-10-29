@@ -1806,7 +1806,12 @@ public boolean useManaPotion() {
     private EquipResult equipInSlot(ObiectEchipament item, String slot) {
         ObiectEchipament oldItem = echipat.put(slot, item);
 
+        // Mark new item as equipped
+        item.setEquipped(true);
+
         if (oldItem != null) {
+            // Mark old item as unequipped
+            oldItem.setEquipped(false);
             inventar.add(oldItem);
             return new EquipResult(true,
                     "Echipat: " + item.getNume() + " (înlocuit: " + oldItem.getNume() + ")",
@@ -1826,6 +1831,8 @@ public boolean useManaPotion() {
 
         ObiectEchipament item = echipat.remove(slot);
         if (item != null) {
+            // Mark item as unequipped
+            item.setEquipped(false);
             inventar.add(item);
             calculateDerivedStats();
             return new EquipResult(true, "Deechipat: " + item.getNume(), item);

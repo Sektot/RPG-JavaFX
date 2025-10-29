@@ -26,6 +26,13 @@ public class DungeonRun implements Serializable {
     private int bossesKilled;
     private int highestDepthReached;
 
+    // Temporary loot tracking (lost on death, kept on escape)
+    private List<com.rpg.model.items.ObiectEchipament> temporaryLoot;
+    private int temporaryGold;
+    private int temporaryExp;
+    private List<com.rpg.model.items.Jewel> temporaryJewels;
+    private int temporaryShaorma;
+
     public DungeonRun(DungeonMap map, Erou hero) {
         this.map = map;
         this.hero = hero;
@@ -37,6 +44,11 @@ public class DungeonRun implements Serializable {
         this.enemiesKilled = 0;
         this.bossesKilled = 0;
         this.highestDepthReached = map.getDepth();
+        this.temporaryLoot = new ArrayList<>();
+        this.temporaryGold = 0;
+        this.temporaryExp = 0;
+        this.temporaryJewels = new ArrayList<>();
+        this.temporaryShaorma = 0;
     }
 
     /**
@@ -141,6 +153,111 @@ public class DungeonRun implements Serializable {
     public int getHighestDepthReached() { return highestDepthReached; }
 
     /**
+     * Add temporary loot from battle (not saved until escape)
+     */
+    public void addTemporaryLoot(List<com.rpg.model.items.ObiectEchipament> loot) {
+        if (loot != null) {
+            temporaryLoot.addAll(loot);
+        }
+    }
+
+    /**
+     * Add temporary gold (not saved until escape)
+     */
+    public void addTemporaryGold(int gold) {
+        temporaryGold += gold;
+    }
+
+    /**
+     * Add temporary exp (not saved until escape)
+     */
+    public void addTemporaryExp(int exp) {
+        temporaryExp += exp;
+    }
+
+    /**
+     * Add temporary jewel (not saved until escape)
+     */
+    public void addTemporaryJewel(com.rpg.model.items.Jewel jewel) {
+        if (jewel != null) {
+            temporaryJewels.add(jewel);
+        }
+    }
+
+    /**
+     * Add temporary shaorma (not saved until escape)
+     */
+    public void addTemporaryShaorma(int shaorma) {
+        temporaryShaorma += shaorma;
+    }
+
+    /**
+     * Apply death penalty - lose temporary loot and 30% gold
+     */
+    public void applyDeathPenalty() {
+        System.out.println("💀 Applying death penalty...");
+        System.out.println("  Lost " + temporaryLoot.size() + " items");
+        System.out.println("  Lost " + temporaryGold + " temporary gold");
+        System.out.println("  Lost " + temporaryExp + " temporary exp");
+        System.out.println("  Lost " + temporaryJewels.size() + " jewels");
+        System.out.println("  Lost " + temporaryShaorma + " shaorma");
+
+        // Clear temporary loot
+        temporaryLoot.clear();
+        temporaryGold = 0;
+        temporaryExp = 0;
+        temporaryJewels.clear();
+        temporaryShaorma = 0;
+
+        // Lose 30% of current gold
+        int goldLoss = (int) (hero.getGold() * 0.30);
+        hero.setGold(Math.max(0, hero.getGold() - goldLoss));
+        System.out.println("  Lost 30% current gold: " + goldLoss);
+    }
+
+    /**
+     * Escape successfully - save all temporary loot to hero
+     */
+    public void escapeSuccessfully() {
+        System.out.println("✅ Escaping successfully!");
+        System.out.println("  Saving " + temporaryLoot.size() + " items");
+        System.out.println("  Saving " + temporaryGold + " gold");
+        System.out.println("  Saving " + temporaryExp + " exp");
+        System.out.println("  Saving " + temporaryJewels.size() + " jewels");
+        System.out.println("  Saving " + temporaryShaorma + " shaorma");
+
+        // Save temporary loot to hero's inventory
+        for (com.rpg.model.items.ObiectEchipament item : temporaryLoot) {
+            hero.getInventar().addItem(item);
+        }
+
+        // Save jewels
+        for (com.rpg.model.items.Jewel jewel : temporaryJewels) {
+            hero.addJewel(jewel);
+        }
+
+        // Save gold, exp, and shaorma
+        hero.adaugaGold(temporaryGold);
+        hero.adaugaXp(temporaryExp);
+        hero.adaugaShaormaRevival(temporaryShaorma);
+
+        // Clear temporary tracking
+        temporaryLoot.clear();
+        temporaryGold = 0;
+        temporaryExp = 0;
+        temporaryJewels.clear();
+        temporaryShaorma = 0;
+    }
+
+    // Getters for temporary loot tracking
+    public List<com.rpg.model.items.ObiectEchipament> getTemporaryLoot() {
+        return new ArrayList<>(temporaryLoot);
+    }
+
+    public int getTemporaryGold() { return temporaryGold; }
+    public int getTemporaryExp() { return temporaryExp; }
+
+    /**
      * Returnează un summary al run-ului pentru display
      */
     public String getRunSummary() {
@@ -160,6 +277,10 @@ public class DungeonRun implements Serializable {
                 sb.append("  • ").append(item.toString()).append("\n");
             }
         }
+        sb.append("\n💼 Temporary Loot (not saved yet):\n");
+        sb.append(String.format("  Gold: %d\n", temporaryGold));
+        sb.append(String.format("  Exp: %d\n", temporaryExp));
+        sb.append(String.format("  Items: %d\n", temporaryLoot.size()));
         sb.append("═══════════════════════════════\n");
         return sb.toString();
     }

@@ -27,6 +27,7 @@ public class Room implements Serializable {
     // 2D Exploration data
     private List<InteractiveObject> objects;  // Interactive objects in room
     private List<EnemySprite> enemies;  // Multiple enemies in room
+    private List<Hazard> hazards;  // Environmental hazards in room
     private double enemySpawnX = -1;  // Enemy spawn position (pixels) - deprecated
     private double enemySpawnY = -1;
 
@@ -41,6 +42,7 @@ public class Room implements Serializable {
         this.treasures = new ArrayList<>();
         this.objects = new ArrayList<>();
         this.enemies = new ArrayList<>();
+        this.hazards = new ArrayList<>();
     }
 
     /**
@@ -149,6 +151,11 @@ public class Room implements Serializable {
         }
         return false;
     }
+
+    // Hazard management
+    public List<Hazard> getHazards() { return hazards; }
+    public void addHazard(Hazard hazard) { this.hazards.add(hazard); }
+    public void removeHazard(Hazard hazard) { this.hazards.remove(hazard); }
 
     /**
      * Returnează reprezentarea vizuală a camerei

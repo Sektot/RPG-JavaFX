@@ -75,6 +75,8 @@ public class RoomExplorationController {
 
     // Input state
     private Set<KeyCode> pressedKeys = new HashSet<>();
+    private double mouseX = 0;
+    private double mouseY = 0;
 
     // UI Labels
     private Label hpLabel;
@@ -88,6 +90,8 @@ public class RoomExplorationController {
 
     // Multi-enemy support
     private List<EnemySprite> activeEnemies = new ArrayList<>();
+    private List<Projectile> activeProjectiles = new ArrayList<>();
+    private List<Hazard> activeHazards = new ArrayList<>();
     private boolean hasLoggedEnemyDraw = false; // Debug flag
 
     // Legacy single enemy support (for backwards compatibility)
@@ -107,6 +111,32 @@ public class RoomExplorationController {
     private boolean effectsHUDVisible = true;
     private Label runItemsTitle;
     private Separator effectsSeparator;
+
+    // Dash and Push abilities
+    private static final double DASH_DISTANCE = 150; // Pixels to dash
+    private static final double DASH_COOLDOWN = 3.0; // Seconds
+    private static final double PUSH_RANGE = 200; // Range to push enemies (from push origin)
+    private static final double PUSH_DISTANCE = 120; // Distance to push enemies
+    private static final double PUSH_COOLDOWN = 5.0; // Seconds
+    private static final double PUSH_WAVE_WIDTH = 120; // Width of push cone
+    private static final double PUSH_WAVE_LENGTH = 200; // Length of push wave
+    private double dashCooldownRemaining = 0;
+    private double pushCooldownRemaining = 0;
+    private long lastFrameTime = 0;
+    private boolean isDashing = false;
+    private double dashProgress = 0;
+    private double dashTargetX = 0;
+    private double dashTargetY = 0;
+    private Label dashCooldownLabel;
+    private Label pushCooldownLabel;
+
+    // Push wave animation
+    private boolean isPushActive = false;
+    private double pushWaveProgress = 0;
+    private double pushAngle = 0; // Direction of push in radians
+
+    // Hazard invulnerability
+    private double playerHazardInvulnerabilityEndTime = 0; // Timestamp when player invulnerability ends
 
     public RoomExplorationController(Stage stage, Erou hero, Room room, DungeonRun dungeonRun, Runnable onRoomExit) {
         this.stage = stage;
@@ -161,6 +191,12 @@ public class RoomExplorationController {
             }
         } else {
             System.out.println("🐛 DEBUG: Room is already cleared, no enemies");
+        }
+
+        // Initialize hazards from room
+        if (!room.getHazards().isEmpty()) {
+            activeHazards.addAll(room.getHazards());
+            System.out.println("✅ Loaded " + activeHazards.size() + " hazards from room");
         }
 
         // Initialize interactive objects if room doesn't have any yet
@@ -338,6 +374,13 @@ public class RoomExplorationController {
         goldLabel = new Label(String.format("💰 Gold: %d", hero.getGold()));
         goldLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #f1c40f; -fx-font-weight: bold;");
 
+        // Ability Cooldowns
+        dashCooldownLabel = new Label("💨 Dash (SPACE): Ready");
+        dashCooldownLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #3498db; -fx-font-weight: bold;");
+
+        pushCooldownLabel = new Label("👊 Push (Q): Ready");
+        pushCooldownLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #e67e22; -fx-font-weight: bold;");
+
         // Separator
         effectsSeparator = new Separator();
         effectsSeparator.setStyle("-fx-background-color: #e94560;");
@@ -355,6 +398,8 @@ public class RoomExplorationController {
             hpLabel, hpBar,
             resourceLabel, resourceBar,
             goldLabel,
+            dashCooldownLabel,
+            pushCooldownLabel,
             effectsSeparator,
             runItemsTitle,
             runItemsPanel
@@ -398,6 +443,31 @@ public class RoomExplorationController {
         }
     }
 
+    /**
+     * Update cooldown UI labels
+     */
+    private void updateCooldownUI() {
+        if (dashCooldownLabel != null) {
+            if (dashCooldownRemaining > 0) {
+                dashCooldownLabel.setText(String.format("💨 Dash (SPACE): %.1fs", dashCooldownRemaining));
+                dashCooldownLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #95a5a6; -fx-font-weight: bold;");
+            } else {
+                dashCooldownLabel.setText("💨 Dash (SPACE): Ready");
+                dashCooldownLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #3498db; -fx-font-weight: bold;");
+            }
+        }
+
+        if (pushCooldownLabel != null) {
+            if (pushCooldownRemaining > 0) {
+                pushCooldownLabel.setText(String.format("👊 Push (Q): %.1fs", pushCooldownRemaining));
+                pushCooldownLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #95a5a6; -fx-font-weight: bold;");
+            } else {
+                pushCooldownLabel.setText("👊 Push (Q): Ready");
+                pushCooldownLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #e67e22; -fx-font-weight: bold;");
+            }
+        }
+    }
+
     private VBox createHeader() {
         VBox header = new VBox(10);
         header.setPadding(new Insets(15));
@@ -432,7 +502,7 @@ public class RoomExplorationController {
         interactionPrompt.setMinHeight(40);
         interactionPrompt.setMaxWidth(600);
 
-        Label controls = new Label("⌨️ WASD - Move | E - Interact | M - Map | ESC - Exit Room");
+        Label controls = new Label("⌨️ WASD - Move | SPACE - Dash | Q - Push | E - Interact | M - Map");
         controls.setStyle("-fx-font-size: 14px; -fx-text-fill: #95a5a6;");
 
         bottom.getChildren().addAll(interactionPrompt, controls);
@@ -449,19 +519,28 @@ public class RoomExplorationController {
                 case M -> showMap();
                 case B -> toggleEffectsHUD();
                 case ESCAPE -> exitRoom();
+                case SPACE -> handleDash();
+                case Q -> handlePush();
             }
         });
 
         scene.setOnKeyReleased(event -> {
             pressedKeys.remove(event.getCode());
         });
+
+        // Track mouse position relative to canvas
+        canvas.setOnMouseMoved(event -> {
+            mouseX = event.getX();
+            mouseY = event.getY();
+        });
     }
 
     private void startGameLoop() {
+        lastFrameTime = System.nanoTime();
         gameLoop = new AnimationTimer() {
             @Override
             public void handle(long now) {
-                update();
+                update(now);
                 render();
             }
         };
@@ -471,7 +550,49 @@ public class RoomExplorationController {
     /**
      * Update game state every frame
      */
-    private void update() {
+    private void update(long now) {
+        // Calculate delta time
+        double deltaTime = (now - lastFrameTime) / 1_000_000_000.0; // Convert to seconds
+        lastFrameTime = now;
+
+        // Update cooldowns
+        if (dashCooldownRemaining > 0) {
+            dashCooldownRemaining = Math.max(0, dashCooldownRemaining - deltaTime);
+            updateCooldownUI();
+        }
+        if (pushCooldownRemaining > 0) {
+            pushCooldownRemaining = Math.max(0, pushCooldownRemaining - deltaTime);
+            updateCooldownUI();
+        }
+
+        // Update push wave animation
+        if (isPushActive) {
+            pushWaveProgress += deltaTime * 3.0; // Animation speed (complete in ~0.33 seconds)
+            if (pushWaveProgress >= 1.0) {
+                isPushActive = false;
+                pushWaveProgress = 0;
+            }
+        }
+
+        // Update enemy action cooldowns
+        for (EnemySprite enemy : activeEnemies) {
+            if (enemy.getActionCooldown() > 0) {
+                enemy.setActionCooldown(Math.max(0, enemy.getActionCooldown() - deltaTime));
+            }
+        }
+
+        // Update projectiles
+        updateProjectiles();
+
+        // Update hazards
+        updateHazards(deltaTime);
+
+        // Handle dash movement
+        if (isDashing) {
+            handleDashMovement();
+            return; // Skip normal movement during dash
+        }
+
         // Update player movement based on pressed keys
         player.setMovingUp(pressedKeys.contains(KeyCode.W));
         player.setMovingDown(pressedKeys.contains(KeyCode.S));
@@ -507,6 +628,12 @@ public class RoomExplorationController {
                 break;
             }
         }
+
+        // Check hazard collisions and damage
+        checkHazardCollisions();
+
+        // Check enemy hazard collisions
+        checkEnemyHazardCollisions();
 
         // Check door transitions
         checkDoorTransitions();
@@ -670,7 +797,7 @@ public class RoomExplorationController {
             case CAMPFIRE -> handleCampfireInteraction();
             case SHOP_TABLE -> handleShopInteraction();
             case FOUNTAIN -> handleFountainInteraction();
-            case PORTAL -> handlePortalInteraction();
+            case PORTAL -> handlePortalInteraction(obj);
             default -> DialogHelper.showInfo("Interaction", "You interact with " + obj.getType().getName());
         }
     }
@@ -848,6 +975,171 @@ public class RoomExplorationController {
     }
 
     /**
+     * Handle dash ability - quick movement in facing direction
+     */
+    private void handleDash() {
+        if (dashCooldownRemaining > 0) {
+            System.out.println("⏰ Dash on cooldown: " + String.format("%.1f", dashCooldownRemaining) + "s remaining");
+            return;
+        }
+
+        if (isDashing) {
+            return; // Already dashing
+        }
+
+        // Start dash
+        isDashing = true;
+        dashProgress = 0;
+
+        // Calculate dash target based on facing direction
+        Direction facing = player.getFacing();
+        double startX = player.getX();
+        double startY = player.getY();
+
+        switch (facing) {
+            case NORTH -> {
+                dashTargetX = startX;
+                dashTargetY = startY - DASH_DISTANCE;
+            }
+            case SOUTH -> {
+                dashTargetX = startX;
+                dashTargetY = startY + DASH_DISTANCE;
+            }
+            case EAST -> {
+                dashTargetX = startX + DASH_DISTANCE;
+                dashTargetY = startY;
+            }
+            case WEST -> {
+                dashTargetX = startX - DASH_DISTANCE;
+                dashTargetY = startY;
+            }
+        }
+
+        System.out.println("💨 Dashing " + facing + "!");
+        dashCooldownRemaining = DASH_COOLDOWN;
+    }
+
+    /**
+     * Handle dash movement each frame
+     */
+    private void handleDashMovement() {
+        dashProgress += 0.15; // Dash speed (0-1 in ~6-7 frames)
+
+        if (dashProgress >= 1.0) {
+            // Dash complete
+            isDashing = false;
+            dashProgress = 0;
+            return;
+        }
+
+        // Interpolate position
+        double startX = player.getX();
+        double startY = player.getY();
+        double newX = startX + (dashTargetX - startX) * 0.15;
+        double newY = startY + (dashTargetY - startY) * 0.15;
+
+        // Store old position for collision check
+        double oldX = player.getX();
+        double oldY = player.getY();
+
+        player.setX(newX);
+        player.setY(newY);
+
+        // Check collision - stop dash if hit wall
+        if (checkWallCollision()) {
+            player.setX(oldX);
+            player.setY(oldY);
+            isDashing = false;
+            dashProgress = 0;
+        }
+    }
+
+    /**
+     * Handle push ability - knockback enemies in mouse direction
+     */
+    private void handlePush() {
+        if (pushCooldownRemaining > 0) {
+            System.out.println("⏰ Push on cooldown: " + String.format("%.1f", pushCooldownRemaining) + "s remaining");
+            return;
+        }
+
+        double playerCenterX = player.getCenterX();
+        double playerCenterY = player.getCenterY();
+
+        // Calculate push direction from player toward mouse
+        double dx = mouseX - playerCenterX;
+        double dy = mouseY - playerCenterY;
+        double length = Math.sqrt(dx * dx + dy * dy);
+
+        if (length < 1) {
+            System.out.println("❌ Mouse too close to player");
+            return;
+        }
+
+        // Normalize direction
+        dx /= length;
+        dy /= length;
+
+        // Store push angle for visual effect
+        pushAngle = Math.atan2(dy, dx);
+
+        // Start push wave animation
+        isPushActive = true;
+        pushWaveProgress = 0;
+
+        int pushedCount = 0;
+
+        // Find and push all enemies in the cone
+        for (EnemySprite enemy : activeEnemies) {
+            if (enemy.getState() == EnemySprite.EnemyState.DEFEATED) {
+                continue;
+            }
+
+            double enemyCenterX = enemy.getCenterX();
+            double enemyCenterY = enemy.getCenterY();
+
+            // Vector from player to enemy
+            double toEnemyX = enemyCenterX - playerCenterX;
+            double toEnemyY = enemyCenterY - playerCenterY;
+            double distanceToEnemy = Math.sqrt(toEnemyX * toEnemyX + toEnemyY * toEnemyY);
+
+            if (distanceToEnemy < 1) continue; // Skip if enemy is at player position
+
+            // Normalize
+            double toEnemyNormX = toEnemyX / distanceToEnemy;
+            double toEnemyNormY = toEnemyY / distanceToEnemy;
+
+            // Calculate dot product to check if enemy is in front of push direction
+            double dotProduct = toEnemyNormX * dx + toEnemyNormY * dy;
+
+            // Calculate angle between push direction and enemy direction
+            double angleToEnemy = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
+
+            // Check if enemy is within cone (45 degrees on each side = 90 degree cone)
+            double coneAngle = Math.PI / 2; // 90 degrees total cone
+
+            if (angleToEnemy <= coneAngle / 2 && distanceToEnemy <= PUSH_RANGE) {
+                // Enemy is in push cone - push it in the push direction
+                double newX = enemy.getX() + dx * PUSH_DISTANCE;
+                double newY = enemy.getY() + dy * PUSH_DISTANCE;
+
+                // Clamp to room bounds
+                newX = Math.max(WALL_THICKNESS, Math.min(ROOM_WIDTH - WALL_THICKNESS - enemy.getWidth(), newX));
+                newY = Math.max(WALL_THICKNESS, Math.min(ROOM_HEIGHT - WALL_THICKNESS - enemy.getHeight(), newY));
+
+                enemy.setX(newX);
+                enemy.setY(newY);
+
+                pushedCount++;
+                System.out.println("👊 Pushed " + enemy.getEnemy().getNume() + " in direction " + Math.toDegrees(pushAngle) + "°");
+            }
+        }
+
+        System.out.println("💥 Push activated! Pushed " + pushedCount + " enemies toward mouse direction");
+        pushCooldownRemaining = PUSH_COOLDOWN;
+    }
+
+    /**
      * Update enemy AI (vision detection, chasing behavior, cooldown checks)
      */
     private void updateEnemyAI() {
@@ -870,30 +1162,660 @@ public class RoomExplorationController {
                 }
             }
 
-            // Check vision range
-            boolean canSee = enemy.canSeePlayer(playerCenterX, playerCenterY, ENEMY_VISION_RANGE);
+            // Update type-specific behaviors based on enemy type
+            switch (enemy.getType()) {
+                case MELEE, TANKY -> updateMeleeEnemyAI(enemy, playerCenterX, playerCenterY);
+                case RANGED -> updateRangedEnemyAI(enemy, playerCenterX, playerCenterY);
+                case CHARGER -> updateChargerEnemyAI(enemy, playerCenterX, playerCenterY);
+                case SUMMONER -> updateMeleeEnemyAI(enemy, playerCenterX, playerCenterY); // Future: implement summoning
+            }
+        }
+    }
 
-            if (canSee && enemy.getState() == EnemySprite.EnemyState.IDLE) {
-                // Player entered vision range - start chasing
-                enemy.setState(EnemySprite.EnemyState.CHASING);
-                System.out.println("👁️ " + enemy.getEnemy().getNume() + " spotted you!");
+    /**
+     * Update melee enemy AI - standard chasing behavior
+     */
+    private void updateMeleeEnemyAI(EnemySprite enemy, double playerCenterX, double playerCenterY) {
+        // Check vision range
+        boolean canSee = enemy.canSeePlayer(playerCenterX, playerCenterY, ENEMY_VISION_RANGE);
+
+        if (canSee && enemy.getState() == EnemySprite.EnemyState.IDLE) {
+            // Player entered vision range - start chasing
+            enemy.setState(EnemySprite.EnemyState.CHASING);
+            System.out.println("👁️ " + enemy.getEnemy().getNume() + " spotted you!");
+        }
+
+        // If chasing, move towards player
+        if (enemy.getState() == EnemySprite.EnemyState.CHASING) {
+            // If player is still in vision range, keep chasing
+            if (canSee) {
+                // Try to move towards player while avoiding hazards
+                moveEnemyWithHazardAvoidance(enemy, playerCenterX, playerCenterY);
+
+                // Update legacy enemy position for rendering (if this is the first enemy)
+                if (activeEnemies.indexOf(enemy) == 0) {
+                    enemyX = enemy.getX();
+                    enemyY = enemy.getY();
+                }
+            } else {
+                // Player left vision range - stop chasing
+                enemy.setState(EnemySprite.EnemyState.IDLE);
+                System.out.println("👁️ " + enemy.getEnemy().getNume() + " lost sight of you");
+            }
+        }
+    }
+
+    /**
+     * Update ranged enemy AI - keeps distance and shoots projectiles
+     */
+    private void updateRangedEnemyAI(EnemySprite enemy, double playerCenterX, double playerCenterY) {
+        boolean canSee = enemy.canSeePlayer(playerCenterX, playerCenterY, ENEMY_VISION_RANGE);
+        double distance = enemy.getDistanceToPoint(playerCenterX, playerCenterY);
+
+        if (canSee && enemy.getState() == EnemySprite.EnemyState.IDLE) {
+            enemy.setState(EnemySprite.EnemyState.CHASING);
+            System.out.println("🏹 Ranged enemy " + enemy.getEnemy().getNume() + " spotted you!");
+        }
+
+        if (enemy.getState() == EnemySprite.EnemyState.CHASING) {
+            if (!canSee) {
+                enemy.setState(EnemySprite.EnemyState.IDLE);
+                return;
             }
 
-            // If chasing, move towards player
-            if (enemy.getState() == EnemySprite.EnemyState.CHASING) {
-                // If player is still in vision range, keep chasing
-                if (canSee) {
-                    enemy.moveTowards(playerCenterX, playerCenterY);
+            double preferredDistance = 150; // Keep this distance from player
+            double tooClose = 100; // Retreat if closer than this
 
-                    // Update legacy enemy position for rendering (if this is the first enemy)
-                    if (activeEnemies.indexOf(enemy) == 0) {
-                        enemyX = enemy.getX();
-                        enemyY = enemy.getY();
+            if (distance < tooClose) {
+                // Too close - retreat away from player (with hazard avoidance)
+                double dx = enemy.getCenterX() - playerCenterX;
+                double dy = enemy.getCenterY() - playerCenterY;
+                double length = Math.sqrt(dx * dx + dy * dy);
+                if (length > 0) {
+                    dx /= length;
+                    dy /= length;
+                    double newX = enemy.getX() + dx * enemy.getMoveSpeed();
+                    double newY = enemy.getY() + dy * enemy.getMoveSpeed();
+
+                    // Check if retreat would lead into hazard
+                    if (!isPositionInHazard(newX, newY, enemy.getWidth(), enemy.getHeight())) {
+                        enemy.setX(newX);
+                        enemy.setY(newY);
                     }
+                    // If hazard blocks retreat, just stay still
+                }
+            } else if (distance > preferredDistance + 50) {
+                // Too far - move closer (with hazard avoidance)
+                moveEnemyWithHazardAvoidance(enemy, playerCenterX, playerCenterY);
+            }
+
+            // Shoot projectile if cooldown is ready
+            if (enemy.getActionCooldown() <= 0 && distance < ENEMY_VISION_RANGE) {
+                shootProjectile(enemy, playerCenterX, playerCenterY);
+                enemy.setActionCooldown(2.0); // 2 second cooldown between shots
+            }
+        }
+    }
+
+    /**
+     * Update charger enemy AI - charges in straight line toward player
+     */
+    private void updateChargerEnemyAI(EnemySprite enemy, double playerCenterX, double playerCenterY) {
+        boolean canSee = enemy.canSeePlayer(playerCenterX, playerCenterY, ENEMY_VISION_RANGE);
+
+        if (canSee && enemy.getState() == EnemySprite.EnemyState.IDLE) {
+            enemy.setState(EnemySprite.EnemyState.CHASING);
+            System.out.println("⚡ Charger " + enemy.getEnemy().getNume() + " spotted you!");
+        }
+
+        if (enemy.getState() == EnemySprite.EnemyState.CHASING) {
+            if (!canSee) {
+                enemy.setState(EnemySprite.EnemyState.IDLE);
+                enemy.setCharging(false);
+                return;
+            }
+
+            if (enemy.isCharging()) {
+                // Execute charge - move in straight line toward target
+                double dx = enemy.getChargeTargetX() - enemy.getX();
+                double dy = enemy.getChargeTargetY() - enemy.getY();
+                double distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < 5) {
+                    // Reached target or close enough - stop charging
+                    enemy.setCharging(false);
+                    enemy.setActionCooldown(3.0); // Cooldown after charge
+                    System.out.println("💥 Charger finished charge!");
                 } else {
-                    // Player left vision range - stop chasing
-                    enemy.setState(EnemySprite.EnemyState.IDLE);
-                    System.out.println("👁️ " + enemy.getEnemy().getNume() + " lost sight of you");
+                    // Continue charging
+                    double chargeSpeed = enemy.getMoveSpeed() * 2.5; // Extra fast during charge
+                    enemy.setX(enemy.getX() + (dx / distance) * chargeSpeed);
+                    enemy.setY(enemy.getY() + (dy / distance) * chargeSpeed);
+                }
+            } else {
+                // Not charging - move toward player normally
+                enemy.moveTowards(playerCenterX, playerCenterY);
+
+                // Initiate charge if cooldown ready and player in range
+                double distance = enemy.getDistanceToPoint(playerCenterX, playerCenterY);
+                if (enemy.getActionCooldown() <= 0 && distance < 250 && distance > 80) {
+                    // Start charge!
+                    enemy.setCharging(true);
+                    enemy.setChargeTargetX(playerCenterX);
+                    enemy.setChargeTargetY(playerCenterY);
+                    System.out.println("⚡ Charger begins charge toward player!");
+                }
+            }
+        }
+    }
+
+    /**
+     * Shoot a projectile from enemy toward player
+     */
+    private void shootProjectile(EnemySprite enemy, double targetX, double targetY) {
+        double enemyCenterX = enemy.getCenterX();
+        double enemyCenterY = enemy.getCenterY();
+
+        // Calculate direction
+        double dx = targetX - enemyCenterX;
+        double dy = targetY - enemyCenterY;
+        double length = Math.sqrt(dx * dx + dy * dy);
+
+        if (length > 0) {
+            dx /= length;
+            dy /= length;
+
+            // Create projectile
+            double projectileSpeed = 4.0;
+            int projectileDamage = (int)(enemy.getEnemy().getDamage() * 0.5); // Projectiles do half damage
+            Projectile projectile = new Projectile(
+                enemyCenterX,
+                enemyCenterY,
+                dx * projectileSpeed,
+                dy * projectileSpeed,
+                projectileDamage,
+                enemy
+            );
+
+            activeProjectiles.add(projectile);
+            System.out.println("🏹 " + enemy.getEnemy().getNume() + " shoots projectile!");
+        }
+    }
+
+    /**
+     * Update all active projectiles - movement and collision
+     */
+    private void updateProjectiles() {
+        activeProjectiles.removeIf(projectile -> {
+            if (!projectile.isActive()) {
+                return true; // Remove inactive projectiles
+            }
+
+            // Update position
+            projectile.update();
+
+            // Check if out of bounds
+            if (projectile.getX() < 0 || projectile.getX() > ROOM_WIDTH ||
+                projectile.getY() < 0 || projectile.getY() > ROOM_HEIGHT) {
+                projectile.setActive(false);
+                return true;
+            }
+
+            // Check collision with player
+            if (projectile.hitsRectangle(player.getX(), player.getY(), player.getWidth(), player.getHeight())) {
+                // Hit player!
+                hero.primesteDamage(projectile.getDamage());
+                System.out.println("💥 Projectile hit player for " + projectile.getDamage() + " damage!");
+                projectile.setActive(false);
+
+                // Update HUD
+                hpLabel.setText(String.format("❤️ HP: %d/%d", hero.getViata(), hero.getViataMaxima()));
+                hpBar.setProgress((double) hero.getViata() / hero.getViataMaxima());
+
+                // Check if player died
+                if (!hero.esteViu()) {
+                    System.out.println("💀 Player killed by projectile!");
+                    // Apply death penalty
+                    dungeonRun.applyDeathPenalty();
+                    if (gameLoop != null) {
+                        gameLoop.stop();
+                    }
+                    if (onRoomExit != null) {
+                        onRoomExit.run();
+                    }
+                }
+                return true;
+            }
+
+            // Check collision with walls
+            if (projectile.getX() < WALL_THICKNESS || projectile.getX() > ROOM_WIDTH - WALL_THICKNESS ||
+                projectile.getY() < WALL_THICKNESS || projectile.getY() > ROOM_HEIGHT - WALL_THICKNESS) {
+                projectile.setActive(false);
+                return true;
+            }
+
+            return false; // Keep projectile active
+        });
+    }
+
+    /**
+     * Update hazard animations and state
+     */
+    private void updateHazards(double deltaTime) {
+        for (Hazard hazard : activeHazards) {
+            if (hazard.isActive()) {
+                hazard.update(deltaTime);
+            }
+        }
+    }
+
+    /**
+     * Check if player is colliding with any hazards and apply damage
+     */
+    private void checkHazardCollisions() {
+        if (!hero.esteViu()) {
+            return; // Don't damage dead players
+        }
+
+        double currentTime = System.currentTimeMillis() / 1000.0; // Convert to seconds
+
+        // Check if player is still invulnerable
+        if (currentTime < playerHazardInvulnerabilityEndTime) {
+            return; // Still invulnerable
+        }
+
+        for (Hazard hazard : activeHazards) {
+            if (!hazard.isActive()) {
+                continue;
+            }
+
+            // Check collision with player
+            if (hazard.collidesWith(player.getX(), player.getY(), player.getWidth(), player.getHeight())) {
+                // Check if hazard can deal damage (based on tick rate)
+                if (hazard.canDealDamage(currentTime)) {
+                    // Calculate percentage-based damage
+                    int damage = (int) (hero.getViataMaxima() * hazard.getDamagePercent());
+                    damage = Math.max(1, damage); // At least 1 damage
+
+                    // Apply damage
+                    hero.primesteDamage(damage);
+                    System.out.println("💥 " + hazard.getType() + " hit player for " + damage + " damage (" +
+                        String.format("%.0f%%", hazard.getDamagePercent() * 100) + " of max HP)!");
+
+                    // Set invulnerability
+                    playerHazardInvulnerabilityEndTime = currentTime + hazard.getInvulnerabilityDuration();
+                    System.out.println("🛡️ Player invulnerable for " + hazard.getInvulnerabilityDuration() + "s");
+
+                    // Update HUD
+                    hpLabel.setText(String.format("❤️ HP: %d/%d", hero.getViata(), hero.getViataMaxima()));
+                    hpBar.setProgress((double) hero.getViata() / hero.getViataMaxima());
+
+                    // Check if player died
+                    if (!hero.esteViu()) {
+                        System.out.println("💀 Player killed by " + hazard.getType() + "!");
+                        // Apply death penalty
+                        dungeonRun.applyDeathPenalty();
+                        if (gameLoop != null) {
+                            gameLoop.stop();
+                        }
+                        if (onRoomExit != null) {
+                            onRoomExit.run();
+                        }
+                        return; // Stop checking other hazards
+                    }
+
+                    return; // Only one hazard can hit per frame
+                }
+            }
+        }
+    }
+
+    /**
+     * Check if a position would place an enemy in a hazard
+     */
+    private boolean isPositionInHazard(double x, double y, double width, double height) {
+        for (Hazard hazard : activeHazards) {
+            if (hazard.isActive() && hazard.collidesWith(x, y, width, height)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if a path from current position to target will pass through a hazard
+     * Uses lookahead to detect hazards before walking into them
+     */
+    private boolean isPathThroughHazard(double startX, double startY, double endX, double endY, double width, double height) {
+        // Check multiple points along the path
+        int checkPoints = 5;
+        for (int i = 0; i <= checkPoints; i++) {
+            double t = i / (double) checkPoints;
+            double checkX = startX + (endX - startX) * t;
+            double checkY = startY + (endY - startY) * t;
+
+            if (isPositionInHazard(checkX, checkY, width, height)) {
+                return true; // Path goes through hazard
+            }
+        }
+        return false; // Path is clear
+    }
+
+    /**
+     * Check if moving toward a target will lead into a hazard (lookahead)
+     */
+    private boolean isMovingTowardHazard(double x, double y, double targetX, double targetY, double width, double height, double lookAheadDistance) {
+        double dx = targetX - x;
+        double dy = targetY - y;
+        double distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 1) return false;
+
+        dx /= distance;
+        dy /= distance;
+
+        // Check position after moving lookAheadDistance forward
+        double futureX = x + dx * lookAheadDistance;
+        double futureY = y + dy * lookAheadDistance;
+
+        return isPositionInHazard(futureX, futureY, width, height);
+    }
+
+    /**
+     * Evaluate how good a path is by simulating multiple steps ahead
+     * Returns a score where higher = better path to target
+     */
+    private double evaluatePathQuality(double startX, double startY, double dirX, double dirY,
+                                       double targetX, double targetY, double width, double height, double speed) {
+        double score = 0;
+        double currentX = startX;
+        double currentY = startY;
+
+        // Simulate 5 steps ahead
+        int steps = 5;
+        for (int i = 0; i < steps; i++) {
+            currentX += dirX * speed;
+            currentY += dirY * speed;
+
+            // Check if this future position is in a hazard
+            if (isPositionInHazard(currentX, currentY, width, height)) {
+                return -10000; // Very bad - leads into hazard
+            }
+
+            // Check if out of bounds
+            if (currentX < WALL_THICKNESS || currentX > ROOM_WIDTH - WALL_THICKNESS - width ||
+                currentY < WALL_THICKNESS || currentY > ROOM_HEIGHT - WALL_THICKNESS - height) {
+                return -5000; // Bad - leads to wall
+            }
+
+            // Calculate distance to target at this point
+            double dx = targetX - (currentX + width / 2);
+            double dy = targetY - (currentY + height / 2);
+            double distToTarget = Math.sqrt(dx * dx + dy * dy);
+
+            // Reward getting closer to target (exponentially better for later steps)
+            score -= distToTarget * (i + 1); // Later steps weighted more
+        }
+
+        return score;
+    }
+
+    /**
+     * Find the best direction to move when going around an obstacle
+     * Uses multi-step simulation to pick the path that actually reaches the target
+     */
+    private double[] findBestPathAroundObstacle(double startX, double startY, double targetX, double targetY,
+                                                 double width, double height, double speed) {
+        double bestScore = Double.NEGATIVE_INFINITY;
+        double bestDirX = 0;
+        double bestDirY = 0;
+
+        // Try 32 directions for very smooth pathfinding
+        for (int i = 0; i < 32; i++) {
+            double angle = (i / 32.0) * Math.PI * 2;
+            double dirX = Math.cos(angle);
+            double dirY = Math.sin(angle);
+
+            double testX = startX + dirX * speed;
+            double testY = startY + dirY * speed;
+
+            // First check: is immediate position safe?
+            if (isPositionInHazard(testX, testY, width, height)) {
+                continue; // Skip this direction
+            }
+
+            // Evaluate how good this path is over multiple steps
+            double pathScore = evaluatePathQuality(startX, startY, dirX, dirY, targetX, targetY, width, height, speed);
+
+            // Add bonus for being in the general direction of target
+            double dx = targetX - (startX + width / 2);
+            double dy = targetY - (startY + height / 2);
+            double dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0) {
+                dx /= dist;
+                dy /= dist;
+                double dotProduct = dirX * dx + dirY * dy;
+                pathScore += dotProduct * 200; // Bonus for right direction
+            }
+
+            if (pathScore > bestScore) {
+                bestScore = pathScore;
+                bestDirX = dirX;
+                bestDirY = dirY;
+            }
+        }
+
+        if (bestScore > Double.NEGATIVE_INFINITY) {
+            return new double[]{bestDirX, bestDirY, bestScore};
+        }
+
+        return null; // No path found
+    }
+
+    /**
+     * Move enemy towards target while avoiding hazards
+     * Enhanced pathfinding with lookahead that can navigate around obstacles
+     */
+    private void moveEnemyWithHazardAvoidance(EnemySprite enemy, double targetX, double targetY) {
+        double oldX = enemy.getX();
+        double oldY = enemy.getY();
+        double centerX = enemy.getCenterX();
+        double centerY = enemy.getCenterY();
+
+        // Calculate direct path to target
+        double dx = targetX - centerX;
+        double dy = targetY - centerY;
+        double distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 1) return; // Already at target
+
+        // Normalize direction
+        dx /= distance;
+        dy /= distance;
+
+        double moveSpeed = enemy.getMoveSpeed();
+        double lookAhead = 50.0; // How far ahead to check for hazards
+
+        // PRIORITY 1: If currently IN a hazard, ESCAPE IMMEDIATELY
+        if (isPositionInHazard(oldX, oldY, enemy.getWidth(), enemy.getHeight())) {
+            if (tryEscapeFromHazard(enemy, oldX, oldY)) {
+                return; // Successfully escaped
+            }
+            // If escape failed, continue trying other movements below
+        }
+
+        // PRIORITY 2: Check if direct path leads into hazard (with lookahead)
+        boolean directPathClear = !isMovingTowardHazard(oldX, oldY, targetX, targetY, enemy.getWidth(), enemy.getHeight(), lookAhead);
+
+        if (directPathClear) {
+            double newX = oldX + dx * moveSpeed;
+            double newY = oldY + dy * moveSpeed;
+
+            // Double-check immediate position is safe
+            if (!isPositionInHazard(newX, newY, enemy.getWidth(), enemy.getHeight())) {
+                enemy.setX(newX);
+                enemy.setY(newY);
+                return;
+            }
+        }
+
+        // PRIORITY 3: Direct path blocked - use SMART pathfinding to go around
+        // This uses multi-step simulation to find the best route
+        double[] bestPath = findBestPathAroundObstacle(oldX, oldY, targetX, targetY,
+                                                        enemy.getWidth(), enemy.getHeight(), moveSpeed);
+
+        if (bestPath != null) {
+            double bestDirX = bestPath[0];
+            double bestDirY = bestPath[1];
+            double bestScore = bestPath[2];
+
+            // Move in the best direction found
+            double newX = oldX + bestDirX * moveSpeed;
+            double newY = oldY + bestDirY * moveSpeed;
+
+            enemy.setX(newX);
+            enemy.setY(newY);
+            return;
+        }
+
+        // PRIORITY 4: Still stuck - try any safe direction (don't be picky)
+        for (int i = 0; i < 16; i++) {
+            double angle = (i / 16.0) * Math.PI * 2;
+            double testX = oldX + Math.cos(angle) * moveSpeed;
+            double testY = oldY + Math.sin(angle) * moveSpeed;
+
+            if (!isPositionInHazard(testX, testY, enemy.getWidth(), enemy.getHeight())) {
+                enemy.setX(testX);
+                enemy.setY(testY);
+                return;
+            }
+        }
+
+        // Completely stuck - don't move
+    }
+
+    /**
+     * Try to escape from a hazard by moving in any safe direction
+     * AGGRESSIVE: Tries multiple distances and all angles
+     */
+    private boolean tryEscapeFromHazard(EnemySprite enemy, double x, double y) {
+        // Try escaping at increasing distances (try closer first, then further)
+        double[] escapeSpeeds = {
+            enemy.getMoveSpeed() * 2.0,  // Try 2x speed first
+            enemy.getMoveSpeed() * 3.0,  // Then 3x speed
+            enemy.getMoveSpeed() * 4.0   // Then 4x speed (really far!)
+        };
+
+        for (double speed : escapeSpeeds) {
+            // Try 16 directions for better coverage
+            for (int i = 0; i < 16; i++) {
+                double angle = (i / 16.0) * Math.PI * 2;
+                double escapeX = x + Math.cos(angle) * speed;
+                double escapeY = y + Math.sin(angle) * speed;
+
+                // Check if this position is safe
+                if (!isPositionInHazard(escapeX, escapeY, enemy.getWidth(), enemy.getHeight())) {
+                    // Check it's not out of bounds
+                    if (escapeX >= WALL_THICKNESS && escapeX <= ROOM_WIDTH - WALL_THICKNESS - enemy.getWidth() &&
+                        escapeY >= WALL_THICKNESS && escapeY <= ROOM_HEIGHT - WALL_THICKNESS - enemy.getHeight()) {
+                        enemy.setX(escapeX);
+                        enemy.setY(escapeY);
+                        System.out.println("🏃 " + enemy.getEnemy().getNume() + " escaped from hazard!");
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Last resort: try ANY position nearby that's safe (desperate escape)
+        for (double radius = 10; radius <= 100; radius += 10) {
+            for (int i = 0; i < 32; i++) {
+                double angle = (i / 32.0) * Math.PI * 2;
+                double escapeX = x + Math.cos(angle) * radius;
+                double escapeY = y + Math.sin(angle) * radius;
+
+                if (!isPositionInHazard(escapeX, escapeY, enemy.getWidth(), enemy.getHeight())) {
+                    if (escapeX >= WALL_THICKNESS && escapeX <= ROOM_WIDTH - WALL_THICKNESS - enemy.getWidth() &&
+                        escapeY >= WALL_THICKNESS && escapeY <= ROOM_HEIGHT - WALL_THICKNESS - enemy.getHeight()) {
+                        enemy.setX(escapeX);
+                        enemy.setY(escapeY);
+                        System.out.println("🏃 " + enemy.getEnemy().getNume() + " desperately escaped!");
+                        return true;
+                    }
+                }
+            }
+        }
+
+        System.out.println("⚠️ " + enemy.getEnemy().getNume() + " completely trapped in hazard!");
+        return false; // No escape found (very rare)
+    }
+
+    /**
+     * Check if enemies are colliding with hazards and apply damage
+     */
+    private void checkEnemyHazardCollisions() {
+        double currentTime = System.currentTimeMillis() / 1000.0; // Convert to seconds
+
+        for (EnemySprite enemy : activeEnemies) {
+            // Skip defeated enemies
+            if (enemy.getState() == EnemySprite.EnemyState.DEFEATED) {
+                continue;
+            }
+
+            // Skip enemies that are dead but not marked defeated yet
+            if (!enemy.getEnemy().esteViu()) {
+                continue;
+            }
+
+            // Check if enemy is invulnerable
+            if (enemy.isInvulnerableToHazards(currentTime)) {
+                continue; // Still invulnerable
+            }
+
+            for (Hazard hazard : activeHazards) {
+                if (!hazard.isActive()) {
+                    continue;
+                }
+
+                // Check collision with enemy
+                if (hazard.collidesWith(enemy.getX(), enemy.getY(), enemy.getWidth(), enemy.getHeight())) {
+                    // Check if hazard can deal damage (based on tick rate)
+                    if (hazard.canDealDamage(currentTime)) {
+                        // Calculate percentage-based damage
+                        int damage = (int) (enemy.getEnemy().getViataMaxima() * hazard.getDamagePercent());
+                        damage = Math.max(1, damage); // At least 1 damage
+
+                        // Apply damage to enemy
+                        enemy.getEnemy().primesteDamage(damage);
+                        System.out.println("💥 " + hazard.getType() + " hit " + enemy.getEnemy().getNume() +
+                            " for " + damage + " damage (" + String.format("%.0f%%", hazard.getDamagePercent() * 100) +
+                            " of max HP)! (HP: " + enemy.getEnemy().getViata() + "/" + enemy.getEnemy().getViataMaxima() + ")");
+
+                        // Set invulnerability
+                        enemy.setHazardInvulnerability(currentTime, hazard.getInvulnerabilityDuration());
+
+                        // Check if enemy died from hazard
+                        if (!enemy.getEnemy().esteViu()) {
+                            System.out.println("💀 " + enemy.getEnemy().getNume() + " killed by " + hazard.getType() + "!");
+                            enemy.setState(EnemySprite.EnemyState.DEFEATED);
+                            activeEnemies.remove(enemy);
+
+                            // Check if room is now cleared
+                            if (activeEnemies.isEmpty()) {
+                                currentRoom.markCleared();
+                                System.out.println("🎉 All enemies defeated by hazards! Room cleared!");
+
+                                // If boss room, spawn portal
+                                if (currentRoom.getType() == RoomType.BOSS) {
+                                    System.out.println("👑 Boss killed by hazards - spawning portal!");
+                                    spawnBossPortal();
+                                }
+                            }
+                            return; // Stop checking this enemy
+                        }
+
+                        break; // Only one hazard can hit this enemy per frame
+                    }
                 }
             }
         }
@@ -903,6 +1825,11 @@ public class RoomExplorationController {
      * Check if player is close to any enemy and trigger combat
      */
     private void checkCombatTrigger() {
+        // Don't trigger combat if hero is dead
+        if (!hero.esteViu()) {
+            return;
+        }
+
         // Legacy single enemy support
         if (enemyAlive && player.isInRangeOf(enemyX + 16, enemyY + 16, COMBAT_TRIGGER_RANGE)) {
             triggerCombat();
@@ -911,8 +1838,13 @@ public class RoomExplorationController {
 
         // Multi-enemy support - check all active enemies
         for (EnemySprite enemy : activeEnemies) {
-            if (enemy.getState() != EnemySprite.EnemyState.DEFEATED &&
-                enemy.canEngagePlayer(player.getCenterX(), player.getCenterY(), COMBAT_TRIGGER_RANGE)) {
+            // Don't trigger combat if enemy is defeated or on cooldown
+            if (enemy.getState() == EnemySprite.EnemyState.DEFEATED ||
+                enemy.getState() == EnemySprite.EnemyState.COOLDOWN) {
+                continue;
+            }
+
+            if (enemy.canEngagePlayer(player.getCenterX(), player.getCenterY(), COMBAT_TRIGGER_RANGE)) {
                 triggerMultiEnemyCombat(enemy);
                 return;
             }
@@ -937,7 +1869,7 @@ public class RoomExplorationController {
         );
 
         // Set callback for when battle ends
-        battleController.setOnBattleEnd((victory, rewards) -> returnFromBattle(victory));
+        battleController.setOnBattleEnd((victory, rewards) -> returnFromBattle(victory, rewards));
 
         stage.setScene(battleController.createScene());
     }
@@ -957,7 +1889,8 @@ public class RoomExplorationController {
         engagedEnemy.setState(EnemySprite.EnemyState.IN_COMBAT);
         engagedEnemy.saveBattlePosition();
 
-        System.out.println("⚔️ Battle started with " + engagedEnemy.getEnemy().getNume());
+        System.out.println("⚔️ Battle started with " + engagedEnemy.getEnemy().getNume() +
+            " (HP: " + engagedEnemy.getEnemy().getViata() + "/" + engagedEnemy.getEnemy().getViataMaxima() + ")");
 
         // Find all other enemies within reinforcement range and add them to queue
         double battleX = engagedEnemy.getCenterX();
@@ -1003,27 +1936,103 @@ public class RoomExplorationController {
             dungeonRun.getMap().getDepth()
         );
 
-        battleController.setOnBattleEnd((victory, rewards) -> returnFromMultiBattle(victory, engagedEnemy, reinforcements));
+        battleController.setOnBattleEnd((victory, rewards) -> returnFromMultiBattle(victory, rewards, engagedEnemy, reinforcements));
         stage.setScene(battleController.createScene());
     }
 
     /**
      * Return from multi-enemy battle
      */
-    private void returnFromMultiBattle(boolean victory, EnemySprite defeatedEnemy, List<EnemySprite> reinforcements) {
+    private void returnFromMultiBattle(boolean victory, com.rpg.service.dto.AbilityDTO.BattleResultDTO rewards,
+                                      EnemySprite defeatedEnemy, List<EnemySprite> reinforcements) {
         if (victory) {
-            // Mark defeated enemy
-            defeatedEnemy.setState(EnemySprite.EnemyState.DEFEATED);
-            activeEnemies.remove(defeatedEnemy);
+            // Store rewards temporarily (not saved until escape)
+            if (rewards != null) {
+                dungeonRun.addTemporaryGold(rewards.getGoldEarned());
+                dungeonRun.addTemporaryExp(rewards.getExperienceEarned());
+                dungeonRun.addTemporaryLoot(rewards.getLoot());
+
+                // Also track jewels and shaorma
+                if (rewards.hasJewelDrop()) {
+                    dungeonRun.addTemporaryJewel(rewards.getJewelDrop());
+                }
+                if (rewards.getShaormaReward() > 0) {
+                    dungeonRun.addTemporaryShaorma(rewards.getShaormaReward());
+                }
+
+                System.out.println("💰 Added temporary rewards: " + rewards.getGoldEarned() + " gold, " +
+                    rewards.getExperienceEarned() + " exp, " + rewards.getLoot().size() + " items, " +
+                    (rewards.hasJewelDrop() ? "1 jewel, " : "") +
+                    (rewards.getShaormaReward() > 0 ? rewards.getShaormaReward() + " shaorma" : ""));
+            }
+
+            // Mark ALL defeated enemies (initial + reinforcements that joined)
+            // Only mark and remove if actually dead
+            if (!defeatedEnemy.getEnemy().esteViu()) {
+                System.out.println("💀 Marking initial enemy as defeated: " + defeatedEnemy.getEnemy().getNume());
+                defeatedEnemy.setState(EnemySprite.EnemyState.DEFEATED);
+                activeEnemies.remove(defeatedEnemy);
+            }
+
+            // Also mark all reinforcements that joined the battle as defeated
+            for (EnemySprite reinforcement : reinforcements) {
+                if (!reinforcement.getEnemy().esteViu()) {
+                    System.out.println("💀 Marking reinforcement as defeated: " + reinforcement.getEnemy().getNume());
+                    reinforcement.setState(EnemySprite.EnemyState.DEFEATED);
+                    activeEnemies.remove(reinforcement);
+                }
+            }
 
             // Check if all enemies defeated
             if (activeEnemies.isEmpty()) {
                 currentRoom.markCleared();
+                System.out.println("🎉 All enemies defeated! Room cleared!");
+
+                // If this was a boss room, spawn portal for progression choice
+                if (currentRoom.getType() == RoomType.BOSS) {
+                    System.out.println("👑 Boss room cleared - spawning portal!");
+                    spawnBossPortal();
+                }
             }
 
             System.out.println("✅ Victory! Remaining enemies: " + activeEnemies.size());
         } else {
-            // Player fled - set cooldowns on all enemies
+            // Player either fled OR died - check hero HP
+            if (!hero.esteViu()) {
+                // Player DIED - apply death penalty and exit to town
+                System.out.println("💀 Player died in multi-battle - applying death penalty");
+                System.out.println("💀 Hero HP: " + hero.getViata() + "/" + hero.getViataMaxima());
+                dungeonRun.applyDeathPenalty();
+
+                // Stop game loop
+                if (gameLoop != null) {
+                    System.out.println("🛑 Stopping game loop...");
+                    gameLoop.stop();
+                    System.out.println("🛑 Game loop stopped");
+                }
+
+                // Exit to town
+                System.out.println("💀 Exiting to town. onRoomExit exists: " + (onRoomExit != null));
+                if (onRoomExit != null) {
+                    System.out.println("🔴 Calling onRoomExit callback");
+                    try {
+                        onRoomExit.run();
+                        System.out.println("✅ onRoomExit callback completed");
+                    } catch (Exception e) {
+                        System.out.println("❌ ERROR in onRoomExit: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                } else {
+                    System.out.println("🔴 No callback - creating town menu directly");
+                    com.rpg.controller.TownMenuController townController =
+                        new com.rpg.controller.TownMenuController(stage, hero);
+                    stage.setScene(townController.createScene());
+                    System.out.println("✅ Town menu scene set");
+                }
+                return; // IMPORTANT: Don't continue to createScene() or gameLoop.start()
+            }
+
+            // Player FLED - set cooldowns on all enemies
             defeatedEnemy.returnToBattlePosition();
             defeatedEnemy.setChaseCooldown(3000); // 3 second cooldown
 
@@ -1032,10 +2041,28 @@ public class RoomExplorationController {
                 other.setChaseCooldown(3000);
             }
 
+            // Push player back slightly to create distance
+            double fleeDistance = 80; // Push back 80 pixels
+            double dx = player.getX() - defeatedEnemy.getX();
+            double dy = player.getY() - defeatedEnemy.getY();
+            double distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 0) {
+                // Normalize and push back
+                double pushX = (dx / distance) * fleeDistance;
+                double pushY = (dy / distance) * fleeDistance;
+                player.setX(player.getX() + pushX);
+                player.setY(player.getY() + pushY);
+
+                // Make sure player stays in bounds
+                player.setX(Math.max(50, Math.min(750, player.getX())));
+                player.setY(Math.max(50, Math.min(550, player.getY())));
+            }
+
             System.out.println("🏃 Fled from battle! Enemies will resume chase in 3 seconds...");
         }
 
-        // Return to exploration
+        // Return to exploration (only if player is alive and fled)
         stage.setScene(createScene());
         gameLoop.start();
     }
@@ -1043,10 +2070,30 @@ public class RoomExplorationController {
     /**
      * Return from battle (called after battle ends) - Legacy single enemy
      */
-    private void returnFromBattle(boolean victory) {
+    private void returnFromBattle(boolean victory, com.rpg.service.dto.AbilityDTO.BattleResultDTO rewards) {
         System.out.println("🔄 returnFromBattle called. Victory: " + victory);
 
         if (victory) {
+            // Store rewards temporarily (not saved until escape)
+            if (rewards != null) {
+                dungeonRun.addTemporaryGold(rewards.getGoldEarned());
+                dungeonRun.addTemporaryExp(rewards.getExperienceEarned());
+                dungeonRun.addTemporaryLoot(rewards.getLoot());
+
+                // Also track jewels and shaorma
+                if (rewards.hasJewelDrop()) {
+                    dungeonRun.addTemporaryJewel(rewards.getJewelDrop());
+                }
+                if (rewards.getShaormaReward() > 0) {
+                    dungeonRun.addTemporaryShaorma(rewards.getShaormaReward());
+                }
+
+                System.out.println("💰 Added temporary rewards: " + rewards.getGoldEarned() + " gold, " +
+                    rewards.getExperienceEarned() + " exp, " + rewards.getLoot().size() + " items, " +
+                    (rewards.hasJewelDrop() ? "1 jewel, " : "") +
+                    (rewards.getShaormaReward() > 0 ? rewards.getShaormaReward() + " shaorma" : ""));
+            }
+
             // Enemy was defeated
             enemyAlive = false;
             currentRoom.markCleared();
@@ -1060,19 +2107,42 @@ public class RoomExplorationController {
             System.out.println("✅ Victory - returning to exploration");
             stage.setScene(createScene());
         } else {
-            // Player died - exit dungeon and return to town
+            // Player died - apply death penalty
+            System.out.println("💀 Player died - applying death penalty");
+            System.out.println("💀 Hero HP: " + hero.getViata() + "/" + hero.getViataMaxima());
+            dungeonRun.applyDeathPenalty();
+
+            // IMPORTANT: Stop the game loop to prevent further updates
+            if (gameLoop != null) {
+                System.out.println("🛑 Stopping game loop...");
+                gameLoop.stop();
+                System.out.println("🛑 Game loop stopped");
+            } else {
+                System.out.println("⚠️ WARNING: gameLoop is null!");
+            }
+
+            // Exit dungeon and return to town (death message already shown by BattleController)
             System.out.println("💀 Defeat - exiting dungeon. onRoomExit exists: " + (onRoomExit != null));
 
             if (onRoomExit != null) {
                 System.out.println("🔴 Calling onRoomExit callback");
-                onRoomExit.run();
+                try {
+                    onRoomExit.run();
+                    System.out.println("✅ onRoomExit callback completed");
+                } catch (Exception e) {
+                    System.out.println("❌ ERROR in onRoomExit callback: " + e.getMessage());
+                    e.printStackTrace();
+                }
             } else {
                 // Fallback: create town menu directly
                 System.out.println("🔴 No callback - creating town menu directly");
                 com.rpg.controller.TownMenuController townController =
                     new com.rpg.controller.TownMenuController(stage, hero);
                 stage.setScene(townController.createScene());
+                System.out.println("✅ Town menu scene set");
             }
+
+            System.out.println("💀 returnFromBattle (death) completed");
         }
     }
 
@@ -1188,6 +2258,9 @@ public class RoomExplorationController {
         // Draw doors
         drawDoors();
 
+        // Draw hazards (under objects and entities)
+        drawHazards();
+
         // Draw interactive objects
         drawObjects();
 
@@ -1198,6 +2271,14 @@ public class RoomExplorationController {
 
         // Draw player
         drawPlayer();
+
+        // Draw projectiles
+        drawProjectiles();
+
+        // Draw push wave effect
+        if (isPushActive) {
+            drawPushWave();
+        }
 
         // Draw minimap
         if (minimapVisible) {
@@ -1373,6 +2454,8 @@ public class RoomExplorationController {
         }
 
         // Draw all active enemies
+        double currentTime = System.currentTimeMillis() / 1000.0;
+
         for (EnemySprite enemy : activeEnemies) {
             if (enemy.getState() == EnemySprite.EnemyState.DEFEATED) {
                 continue; // Don't draw defeated enemies
@@ -1381,18 +2464,66 @@ public class RoomExplorationController {
             double x = enemy.getX();
             double y = enemy.getY();
 
-            if (enemySprite != null) {
-                // Draw enemy sprite
+            // Check if enemy is invulnerable
+            boolean isInvulnerable = enemy.isInvulnerableToHazards(currentTime);
+
+            // Flash effect during invulnerability
+            if (isInvulnerable) {
+                double flashCycle = (currentTime * 10) % 2; // Flashes 5 times per second
+                if (flashCycle < 1) {
+                    // Flash white overlay
+                    gc.save();
+                    gc.setGlobalAlpha(0.4);
+                    gc.setFill(Color.WHITE);
+                    gc.fillOval(x - 2, y - 2, 36, 36);
+                    gc.restore();
+                }
+            }
+
+            // Choose color and emoji based on enemy type
+            Color enemyColor;
+            String enemyEmoji;
+            switch (enemy.getType()) {
+                case RANGED -> {
+                    enemyColor = Color.rgb(150, 100, 200); // Purple for ranged
+                    enemyEmoji = "🏹";
+                }
+                case CHARGER -> {
+                    enemyColor = Color.rgb(255, 150, 0); // Orange for charger
+                    enemyEmoji = enemy.isCharging() ? "⚡" : "🐂"; // Lightning when charging
+                }
+                case TANKY -> {
+                    enemyColor = Color.rgb(100, 100, 100); // Gray for tank
+                    enemyEmoji = "🛡️";
+                }
+                case SUMMONER -> {
+                    enemyColor = Color.rgb(200, 100, 255); // Magenta for summoner
+                    enemyEmoji = "🔮";
+                }
+                default -> { // MELEE
+                    enemyColor = Color.rgb(200, 50, 50); // Red for melee
+                    enemyEmoji = "👾";
+                }
+            }
+
+            if (enemySprite != null && enemy.getType() == EnemySprite.EnemyType.MELEE) {
+                // Draw enemy sprite (only for melee for now)
                 gc.drawImage(enemySprite, x, y, 32, 32);
             } else {
-                // Fallback: red circle with emoji
-                gc.setFill(Color.rgb(200, 50, 50));
+                // Draw colored circle with type-specific emoji
+                gc.setFill(enemyColor);
                 gc.fillOval(x, y, 32, 32);
+
+                // Add glow effect for charging enemies
+                if (enemy.isCharging()) {
+                    gc.setFill(Color.rgb(255, 255, 0, 0.5));
+                    gc.fillOval(x - 4, y - 4, 40, 40);
+                }
 
                 gc.setFill(Color.WHITE);
                 gc.setFont(new Font(20));
                 gc.setTextAlign(TextAlignment.CENTER);
-                gc.fillText("👾", x + 16, y + 22);
+                gc.fillText(enemyEmoji, x + 16, y + 22);
             }
 
             // Draw vision range (debug - can remove later)
@@ -1401,6 +2532,14 @@ public class RoomExplorationController {
                 gc.setLineWidth(2);
                 gc.strokeOval(x + 16 - ENEMY_VISION_RANGE, y + 16 - ENEMY_VISION_RANGE,
                         ENEMY_VISION_RANGE * 2, ENEMY_VISION_RANGE * 2);
+            }
+
+            // Draw charge indicator
+            if (enemy.isCharging()) {
+                // Draw line showing charge direction
+                gc.setStroke(Color.rgb(255, 200, 0, 0.7));
+                gc.setLineWidth(3);
+                gc.strokeLine(x + 16, y + 16, enemy.getChargeTargetX(), enemy.getChargeTargetY());
             }
         }
 
@@ -1420,6 +2559,23 @@ public class RoomExplorationController {
     }
 
     private void drawPlayer() {
+        // Check if player is invulnerable
+        double currentTime = System.currentTimeMillis() / 1000.0;
+        boolean isInvulnerable = currentTime < playerHazardInvulnerabilityEndTime;
+
+        // Flash effect during invulnerability (blink on/off every 0.1 seconds)
+        if (isInvulnerable) {
+            double flashCycle = (currentTime * 10) % 2; // Flashes 5 times per second
+            if (flashCycle < 1) {
+                // Flash white overlay
+                gc.save();
+                gc.setGlobalAlpha(0.5);
+                gc.setFill(Color.WHITE);
+                gc.fillOval(player.getX() - 2, player.getY() - 2, player.getWidth() + 4, player.getHeight() + 4);
+                gc.restore();
+            }
+        }
+
         Image sprite = currentPlayerAnimation.getCurrentFrame();
 
         if (sprite != null) {
@@ -1435,6 +2591,217 @@ public class RoomExplorationController {
             gc.setTextAlign(TextAlignment.CENTER);
             gc.fillText("🧙", player.getX() + player.getWidth() / 2, player.getY() + player.getHeight() / 2 + 6);
         }
+    }
+
+    /**
+     * Draw all active projectiles
+     */
+    /**
+     * Draw environmental hazards with visual effects
+     */
+    private void drawHazards() {
+        for (Hazard hazard : activeHazards) {
+            if (!hazard.isActive()) {
+                continue;
+            }
+
+            double x = hazard.getX();
+            double y = hazard.getY();
+            double width = hazard.getWidth();
+            double height = hazard.getHeight();
+            double pulseIntensity = hazard.getPulseIntensity(); // 0 to 1 for pulsing effects
+
+            switch (hazard.getType()) {
+                case SPIKES -> {
+                    // Draw spikes - dark gray rectangles with triangular spikes
+                    gc.setFill(Color.rgb(60, 60, 60));
+                    gc.fillRect(x, y, width, height);
+
+                    // Draw spike pattern
+                    gc.setFill(Color.rgb(100, 100, 100));
+                    int spikeCount = (int) (width / 10);
+                    for (int i = 0; i < spikeCount; i++) {
+                        double spikeX = x + (i * width / spikeCount);
+                        double spikeWidth = width / spikeCount;
+                        double spikeHeight = 8;
+
+                        // Triangle spike
+                        gc.fillPolygon(
+                            new double[]{spikeX, spikeX + spikeWidth / 2, spikeX + spikeWidth},
+                            new double[]{y + height, y + height - spikeHeight, y + height},
+                            3
+                        );
+                    }
+
+                    // Border
+                    gc.setStroke(Color.rgb(80, 80, 80));
+                    gc.setLineWidth(2);
+                    gc.strokeRect(x, y, width, height);
+                }
+
+                case FIRE_PIT -> {
+                    // Draw fire pit - orange/red with pulsing glow
+                    double glowIntensity = 0.5 + pulseIntensity * 0.5;
+
+                    // Outer glow (pulsing)
+                    gc.setFill(Color.rgb(255, 100, 0, glowIntensity * 0.3));
+                    gc.fillOval(x - width * 0.2, y - height * 0.2, width * 1.4, height * 1.4);
+
+                    // Main fire circle
+                    gc.setFill(Color.rgb(255, 100, 0, 0.8));
+                    gc.fillOval(x, y, width, height);
+
+                    // Inner fire (brighter, pulsing)
+                    gc.setFill(Color.rgb(255, 200, 0, glowIntensity));
+                    gc.fillOval(x + width * 0.2, y + height * 0.2, width * 0.6, height * 0.6);
+
+                    // Flame particles (random flickering)
+                    gc.setFill(Color.rgb(255, 150, 0, pulseIntensity * 0.6));
+                    for (int i = 0; i < 5; i++) {
+                        double particleX = x + width * 0.3 + Math.random() * width * 0.4;
+                        double particleY = y + height * 0.2 + Math.random() * height * 0.3;
+                        double particleSize = 4 + Math.random() * 6;
+                        gc.fillOval(particleX, particleY, particleSize, particleSize);
+                    }
+                }
+
+                case POISON_GAS -> {
+                    // Draw poison gas - green cloud with transparency and pulsing
+                    double opacity = 0.3 + pulseIntensity * 0.2;
+
+                    // Draw multiple overlapping circles for cloud effect
+                    gc.setFill(Color.rgb(100, 200, 50, opacity * 0.4));
+                    gc.fillOval(x - width * 0.1, y - height * 0.1, width * 1.2, height * 1.2);
+
+                    gc.setFill(Color.rgb(80, 180, 40, opacity * 0.5));
+                    gc.fillOval(x, y, width, height);
+
+                    gc.setFill(Color.rgb(120, 220, 60, opacity * 0.6));
+                    gc.fillOval(x + width * 0.15, y + height * 0.15, width * 0.7, height * 0.7);
+
+                    // Poison particles drifting
+                    gc.setFill(Color.rgb(100, 200, 50, opacity * 0.8));
+                    for (int i = 0; i < 8; i++) {
+                        double particleX = x + Math.random() * width;
+                        double particleY = y + Math.random() * height;
+                        double particleSize = 3 + Math.random() * 5;
+                        gc.fillOval(particleX, particleY, particleSize, particleSize);
+                    }
+
+                    // Warning text for poison
+                    gc.setFill(Color.rgb(120, 220, 60, opacity * 0.9));
+                    gc.setFont(new javafx.scene.text.Font("Arial", 16));
+                    gc.fillText("☠", x + width / 2 - 8, y + height / 2 + 6);
+                }
+            }
+        }
+    }
+
+    private void drawProjectiles() {
+        for (Projectile projectile : activeProjectiles) {
+            // Draw projectile as a glowing circle
+            double x = projectile.getX();
+            double y = projectile.getY();
+            double radius = projectile.getRadius();
+
+            // Outer glow
+            gc.setFill(Color.rgb(255, 100, 100, 0.3));
+            gc.fillOval(x - radius * 2, y - radius * 2, radius * 4, radius * 4);
+
+            // Inner projectile
+            gc.setFill(Color.rgb(255, 50, 50));
+            gc.fillOval(x - radius, y - radius, radius * 2, radius * 2);
+
+            // Highlight
+            gc.setFill(Color.rgb(255, 200, 200, 0.8));
+            gc.fillOval(x - radius * 0.5, y - radius * 0.5, radius, radius);
+        }
+    }
+
+    /**
+     * Draw push wave visual effect
+     */
+    private void drawPushWave() {
+        double playerCenterX = player.getCenterX();
+        double playerCenterY = player.getCenterY();
+
+        // Calculate current wave length based on progress
+        double currentLength = PUSH_WAVE_LENGTH * pushWaveProgress;
+        double currentWidth = PUSH_WAVE_WIDTH * (1 - pushWaveProgress * 0.5); // Slightly narrow as it extends
+
+        // Calculate wave opacity (fade out as it extends)
+        double opacity = 1.0 - pushWaveProgress;
+
+        // Draw the push wave as a cone/arc
+        gc.save();
+
+        // Set color with opacity (orange/yellow for push effect)
+        gc.setStroke(Color.rgb(255, 165, 0, opacity * 0.8));
+        gc.setFill(Color.rgb(255, 200, 0, opacity * 0.3));
+        gc.setLineWidth(3);
+
+        // Draw multiple wave rings for better visual effect
+        int waveRings = 3;
+        for (int i = 0; i < waveRings; i++) {
+            double ringProgress = pushWaveProgress - (i * 0.15);
+            if (ringProgress < 0) continue;
+            if (ringProgress > 1) continue;
+
+            double ringLength = PUSH_WAVE_LENGTH * ringProgress;
+            double ringOpacity = (1.0 - ringProgress) * opacity;
+
+            gc.setStroke(Color.rgb(255, 165, 0, ringOpacity * 0.6));
+            gc.setLineWidth(4 - i);
+
+            // Draw arc representing the push cone
+            // Calculate the cone's endpoints
+            double coneHalfAngle = Math.PI / 4; // 45 degrees on each side
+
+            // Left edge of cone
+            double leftAngle = pushAngle - coneHalfAngle;
+            double leftX = playerCenterX + Math.cos(leftAngle) * ringLength;
+            double leftY = playerCenterY + Math.sin(leftAngle) * ringLength;
+
+            // Right edge of cone
+            double rightAngle = pushAngle + coneHalfAngle;
+            double rightX = playerCenterX + Math.cos(rightAngle) * ringLength;
+            double rightY = playerCenterY + Math.sin(rightAngle) * ringLength;
+
+            // Center of push
+            double centerX = playerCenterX + Math.cos(pushAngle) * ringLength;
+            double centerY = playerCenterY + Math.sin(pushAngle) * ringLength;
+
+            // Draw lines forming the cone
+            gc.strokeLine(playerCenterX, playerCenterY, leftX, leftY);
+            gc.strokeLine(playerCenterX, playerCenterY, rightX, rightY);
+
+            // Draw arc at the end
+            gc.strokeArc(
+                centerX - ringLength * 0.5,
+                centerY - ringLength * 0.5,
+                ringLength,
+                ringLength,
+                -Math.toDegrees(pushAngle + coneHalfAngle),
+                Math.toDegrees(coneHalfAngle * 2),
+                javafx.scene.shape.ArcType.OPEN
+            );
+
+            // Add some particle effects
+            if (i == 0) {
+                int particleCount = 5;
+                for (int p = 0; p < particleCount; p++) {
+                    double particleAngle = pushAngle + (Math.random() - 0.5) * coneHalfAngle * 2;
+                    double particleDistance = ringLength * (0.8 + Math.random() * 0.4);
+                    double px = playerCenterX + Math.cos(particleAngle) * particleDistance;
+                    double py = playerCenterY + Math.sin(particleAngle) * particleDistance;
+
+                    gc.setFill(Color.rgb(255, 220, 100, ringOpacity * 0.8));
+                    gc.fillOval(px - 3, py - 3, 6, 6);
+                }
+            }
+        }
+
+        gc.restore();
     }
 
     /**
@@ -1613,22 +2980,35 @@ public class RoomExplorationController {
     /**
      * Handle portal interaction - choice to leave or go deeper
      */
-    private void handlePortalInteraction() {
+    private void handlePortalInteraction(InteractiveObject portal) {
+        // Check if this is an escape portal (in start room) or boss portal
+        if ("ESCAPE_PORTAL".equals(portal.getData())) {
+            handleEscapePortal();
+            return;
+        }
+
+        // Otherwise, handle as boss portal
         // Award dungeon tokens for completing this floor
         int currentDepth = dungeonRun.getMap().getDepth();
         int tokensEarned = 10; // Base reward per floor
         hero.adaugaDungeonTickets(tokensEarned);
 
-        boolean goDeeper = DialogHelper.showConfirmation(
-            "🌀 Boss Portal",
-            "You've defeated the boss!\n\n" +
-            "💎 Gold: " + hero.getGold() + "\n" +
-            "🎫 Dungeon Tokens: +" + tokensEarned + " (Total: " + hero.getDungeonTickets() + ")\n" +
-            "⭐ Current depth: " + currentDepth + "\n\n" +
-            "What do you want to do?\n\n" +
-            "✅ YES = Go deeper (next floor)\n" +
-            "❌ NO = Leave dungeon (return to town)"
-        );
+        // Build dialog showing temporary loot that will be saved
+        StringBuilder message = new StringBuilder();
+        message.append("You've defeated the boss!\n\n");
+        message.append("💼 TEMPORARY LOOT TO BE SAVED:\n");
+        message.append(String.format("  💰 Gold: %d\n", dungeonRun.getTemporaryGold()));
+        message.append(String.format("  ⭐ Exp: %d\n", dungeonRun.getTemporaryExp()));
+        message.append(String.format("  🎒 Items: %d\n", dungeonRun.getTemporaryLoot().size()));
+        message.append("\n");
+        message.append("💎 Current Gold: ").append(hero.getGold()).append("\n");
+        message.append("🎫 Dungeon Tokens: +").append(tokensEarned).append(" (Total: ").append(hero.getDungeonTickets()).append(")\n");
+        message.append("⭐ Current depth: ").append(currentDepth).append("\n\n");
+        message.append("What do you want to do?\n\n");
+        message.append("✅ YES = Go deeper (next floor)\n");
+        message.append("❌ NO = Leave dungeon (SAVE LOOT and return to town)");
+
+        boolean goDeeper = DialogHelper.showConfirmation("🌀 Boss Portal", message.toString());
 
         gameLoop.stop();
 
@@ -1640,7 +3020,8 @@ public class RoomExplorationController {
             DialogHelper.showInfo(
                 "Descending...",
                 "You descend to floor " + nextDepth + "!\n\n" +
-                "⚠️ Enemies will be stronger!"
+                "⚠️ Enemies will be stronger!\n" +
+                "💼 Your temporary loot is still being tracked."
             );
 
             // Create new dungeon controller for next floor, passing the existing run
@@ -1649,24 +3030,68 @@ public class RoomExplorationController {
 
             stage.setScene(nextDungeon.createScene());
         } else {
-            // Player chose to leave - just show summary (stats will be recorded on actual exit)
-            String summary = "✅ LEAVING DUNGEON!\n\n";
-            summary += "Returning to town...\n\n";
+            // Player chose to leave - SAVE ALL TEMPORARY LOOT!
+            dungeonRun.escapeSuccessfully();
+
+            String summary = "✅ ESCAPED SUCCESSFULLY!\n\n";
+            summary += "💾 LOOT SAVED TO INVENTORY!\n\n";
             summary += "📊 CURRENT RUN STATS:\n";
             summary += String.format("  • Deepest Depth: %d\n", dungeonRun.getHighestDepthReached());
             summary += String.format("  • Enemies Defeated: %d\n", dungeonRun.getEnemiesKilled());
             summary += String.format("  • Bosses Defeated: %d\n", dungeonRun.getBossesKilled());
-            summary += String.format("  • Items Collected: %d\n", dungeonRun.getActiveRunItems().size());
+            summary += String.format("  • Run Items Collected: %d\n", dungeonRun.getActiveRunItems().size());
             summary += String.format("\n🎫 Tokens Earned This Floor: +%d\n", tokensEarned);
             summary += String.format("🎫 Total Tokens: %d\n", hero.getDungeonTickets());
-            summary += "\n💡 Full stats will be recorded when you exit!";
 
-            com.rpg.utils.DialogHelper.showSuccess("Leaving Dungeon", summary);
+            com.rpg.utils.DialogHelper.showSuccess("Escaped Dungeon", summary);
 
             // Return to town (exitDungeon will record completion stats)
             if (onRoomExit != null) {
                 onRoomExit.run();
             }
         }
+    }
+
+    /**
+     * Handle escape portal in start room - allows player to leave and save loot
+     */
+    private void handleEscapePortal() {
+        // Build dialog showing what will be saved
+        StringBuilder message = new StringBuilder();
+        message.append("🌀 ESCAPE PORTAL\n\n");
+        message.append("Use this portal to escape the dungeon and SAVE your temporary loot!\n\n");
+        message.append("💼 TEMPORARY LOOT TO BE SAVED:\n");
+        message.append(String.format("  💰 Gold: %d\n", dungeonRun.getTemporaryGold()));
+        message.append(String.format("  ⭐ Exp: %d\n", dungeonRun.getTemporaryExp()));
+        message.append(String.format("  🎒 Items: %d\n", dungeonRun.getTemporaryLoot().size()));
+        message.append("\n");
+        message.append("⚠️ You won't get tokens for escaping early!\n");
+        message.append("⚠️ Only boss portals grant dungeon tokens.\n\n");
+        message.append("Do you want to escape and save your loot?");
+
+        boolean escape = DialogHelper.showConfirmation("🌀 Escape Portal", message.toString());
+
+        if (escape) {
+            gameLoop.stop();
+
+            // SAVE ALL TEMPORARY LOOT!
+            dungeonRun.escapeSuccessfully();
+
+            String summary = "✅ ESCAPED SUCCESSFULLY!\n\n";
+            summary += "💾 LOOT SAVED TO INVENTORY!\n\n";
+            summary += "📊 RUN STATS:\n";
+            summary += String.format("  • Deepest Depth: %d\n", dungeonRun.getHighestDepthReached());
+            summary += String.format("  • Enemies Defeated: %d\n", dungeonRun.getEnemiesKilled());
+            summary += String.format("  • Bosses Defeated: %d\n", dungeonRun.getBossesKilled());
+            summary += String.format("  • Run Items Collected: %d\n", dungeonRun.getActiveRunItems().size());
+
+            com.rpg.utils.DialogHelper.showSuccess("Escaped Dungeon", summary);
+
+            // Return to town
+            if (onRoomExit != null) {
+                onRoomExit.run();
+            }
+        }
+        // If they chose not to escape, just return to exploration (gameLoop keeps running)
     }
 }

@@ -44,6 +44,7 @@ public class BattleControllerFX {
     private MultiBattleState multiBattleState;
     private boolean isMultiBattle = false;
     private Inamic currentTarget; // Current target in multi-enemy battle
+    private int selectedSlotIndex = 0; // Currently selected enemy slot (0-3)
 
     // 🆕 ADAUGĂ ACESTEA
     private final boolean inDungeon;
@@ -393,7 +394,7 @@ public class BattleControllerFX {
     }
 
     /**
-     * Create individual enemy slot panel
+     * Create individual enemy slot panel (clickable for target selection)
      */
     private VBox createEnemySlotPanel(MultiBattleState.BattleSlot slot, int slotIndex) {
         VBox slotPanel = new VBox(5);
@@ -401,18 +402,34 @@ public class BattleControllerFX {
         slotPanel.setAlignment(Pos.CENTER_LEFT);
 
         if (slot.isActive() && slot.getEnemy() != null && slot.getEnemy().esteViu()) {
-            // Active enemy
+            // Active enemy - clickable for target selection
             Inamic enemy = slot.getEnemy();
+
+            // Check if this is the selected target
+            boolean isSelected = (slotIndex == selectedSlotIndex);
+
+            // Style with selection highlight
+            String borderColor = isSelected ? "#FFD700" : "#e74c3c"; // Gold if selected, red otherwise
+            String borderWidth = isSelected ? "4" : "2";
+
             slotPanel.setStyle(
                     "-fx-background-color: #1a1a2e; " +
                             "-fx-background-radius: 8; " +
-                            "-fx-border-color: #e74c3c; " +
-                            "-fx-border-width: 2; " +
-                            "-fx-border-radius: 8;"
+                            "-fx-border-color: " + borderColor + "; " +
+                            "-fx-border-width: " + borderWidth + "; " +
+                            "-fx-border-radius: 8; " +
+                            "-fx-cursor: hand;" // Show it's clickable
             );
 
-            Label nameLabel = new Label("Slot " + (slotIndex + 1) + ": " + enemy.getNume());
-            nameLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;");
+            // Add selection indicator
+            Label nameLabel;
+            if (isSelected) {
+                nameLabel = new Label("🎯 Slot " + (slotIndex + 1) + ": " + enemy.getNume() + " [TARGET]");
+                nameLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #FFD700;");
+            } else {
+                nameLabel = new Label("Slot " + (slotIndex + 1) + ": " + enemy.getNume());
+                nameLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #e74c3c;");
+            }
 
             ProgressBar hpBar = new ProgressBar((double) enemy.getViata() / enemy.getViataMaxima());
             hpBar.setPrefWidth(250);
@@ -423,6 +440,38 @@ public class BattleControllerFX {
             hpLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: white;");
 
             slotPanel.getChildren().addAll(nameLabel, hpBar, hpLabel);
+
+            // Make clickable to select this enemy as target
+            slotPanel.setOnMouseClicked(event -> {
+                selectEnemyTarget(slotIndex);
+            });
+
+            // Hover effect
+            slotPanel.setOnMouseEntered(event -> {
+                if (slotIndex != selectedSlotIndex) {
+                    slotPanel.setStyle(
+                            "-fx-background-color: #252540; " +
+                                    "-fx-background-radius: 8; " +
+                                    "-fx-border-color: #e74c3c; " +
+                                    "-fx-border-width: 2; " +
+                                    "-fx-border-radius: 8; " +
+                                    "-fx-cursor: hand;"
+                    );
+                }
+            });
+
+            slotPanel.setOnMouseExited(event -> {
+                if (slotIndex != selectedSlotIndex) {
+                    slotPanel.setStyle(
+                            "-fx-background-color: #1a1a2e; " +
+                                    "-fx-background-radius: 8; " +
+                                    "-fx-border-color: #e74c3c; " +
+                                    "-fx-border-width: 2; " +
+                                    "-fx-border-radius: 8; " +
+                                    "-fx-cursor: hand;"
+                    );
+                }
+            });
 
         } else {
             // Empty slot - check if reinforcement incoming
@@ -486,6 +535,56 @@ public class BattleControllerFX {
         enemyPanelContainer.setStyle(newPanel.getStyle());
         enemyPanelContainer.setPadding(newPanel.getPadding());
         enemyPanelContainer.setAlignment(newPanel.getAlignment());
+    }
+
+    /**
+     * Select enemy target by slot index
+     */
+    private void selectEnemyTarget(int slotIndex) {
+        if (!isMultiBattle || multiBattleState == null) {
+            System.out.println("🐛 selectEnemyTarget: Not a multi-battle");
+            return;
+        }
+
+        MultiBattleState.BattleSlot slot = multiBattleState.getSlot(slotIndex);
+        System.out.println("🐛 selectEnemyTarget: Slot " + slotIndex + " clicked");
+
+        // Only allow selecting active, alive enemies
+        if (slot != null && slot.isActive() && slot.getEnemy() != null && slot.getEnemy().esteViu()) {
+            selectedSlotIndex = slotIndex;
+            currentTarget = slot.getEnemy();
+
+            System.out.println("✅ Target set: " + currentTarget.getNume() + " at slot " + selectedSlotIndex);
+            addToLog("🎯 Target selected: " + currentTarget.getNume() + " (Slot " + (slotIndex + 1) + ")");
+
+            // Refresh UI to show selection
+            refreshMultiEnemyPanel();
+        } else {
+            System.out.println("❌ Slot " + slotIndex + " is not selectable (empty or dead)");
+        }
+    }
+
+    /**
+     * Auto-select next alive enemy when current target dies
+     */
+    private void autoSelectNextEnemy() {
+        if (!isMultiBattle || multiBattleState == null) {
+            return;
+        }
+
+        // Find first alive enemy
+        for (int i = 0; i < MultiBattleState.MAX_ACTIVE_ENEMIES; i++) {
+            MultiBattleState.BattleSlot slot = multiBattleState.getSlot(i);
+            if (slot.isActive() && slot.getEnemy() != null && slot.getEnemy().esteViu()) {
+                selectedSlotIndex = i;
+                currentTarget = slot.getEnemy();
+                addToLog("🎯 Auto-targeting: " + currentTarget.getNume() + " (Slot " + (i + 1) + ")");
+                return;
+            }
+        }
+
+        // No enemies left
+        currentTarget = null;
     }
 
     /**
@@ -624,11 +723,15 @@ public class BattleControllerFX {
                     initData.getAbilities()
             ));
 
+            // Auto-select first enemy as target
+            autoSelectNextEnemy();
+
             battleLog.appendText("⚔️ MULTI-ENEMY BATTLE!\n");
             battleLog.appendText("Active enemies: " + multiBattleState.getActiveEnemyCount() + "/4\n");
             if (multiBattleState.getReinforcementQueueSize() > 0) {
                 battleLog.appendText("Reinforcements: " + multiBattleState.getReinforcementQueueSize() + " incoming!\n");
             }
+            battleLog.appendText("💡 Click on enemy slots to select target!\n");
             battleLog.appendText("\n");
             return;
         }
@@ -694,7 +797,10 @@ public class BattleControllerFX {
     private void handleNormalAttack() {
         disableAllButtons();
 
-        AbilityDTO.BattleTurnResultDTO result = battleService.executeNormalAttack(hero, enemy);
+        // Use currentTarget for multi-battles, enemy for single battles
+        Inamic target = (isMultiBattle && currentTarget != null) ? currentTarget : enemy;
+
+        AbilityDTO.BattleTurnResultDTO result = battleService.executeNormalAttack(hero, target);
 
         addToLog(result.getLog());
 
@@ -702,12 +808,31 @@ public class BattleControllerFX {
             handleBattleEnd(result);
         } else {
             updateUI(result.getCurrentState());
+
+            // Auto-select next alive enemy if current target died
+            if (isMultiBattle && multiBattleState != null && !target.esteViu()) {
+                autoSelectNextEnemy();
+            }
+
             enableAllButtons();
         }
     }
 
     private void handleFlee() {
-        if (enemy.isBoss()) {
+        // Check for boss in multi-battle
+        boolean hasBoss = false;
+        if (isMultiBattle && multiBattleState != null) {
+            for (MultiBattleState.BattleSlot slot : multiBattleState.getSlots()) {
+                if (slot.isActive() && slot.getEnemy() != null && slot.getEnemy().isBoss()) {
+                    hasBoss = true;
+                    break;
+                }
+            }
+        } else if (enemy != null && enemy.isBoss()) {
+            hasBoss = true;
+        }
+
+        if (hasBoss) {
             addToLog("❌ Nu poți fugi de la un BOSS!");
             return;
         }
@@ -715,12 +840,21 @@ public class BattleControllerFX {
         if (DialogHelper.showConfirmation("Fugă", "Ești sigur că vrei să fugi din luptă?")) {
             disableAllButtons();
 
-            AbilityDTO.BattleTurnResultDTO result = battleService.attemptFlee(hero, enemy);
+            // For multi-battle, need to pass correct enemy reference
+            Inamic fleeTarget = isMultiBattle && currentTarget != null ? currentTarget : enemy;
+            AbilityDTO.BattleTurnResultDTO result = battleService.attemptFlee(hero, fleeTarget);
             addToLog(result.getLog());
 
             if (result.hasFled()) {
                 DialogHelper.showInfo("Fugă Reușită", "Ai scăpat din luptă!");
-                returnToTown();
+
+                // 🆕 In dungeon mode, call callback for flee (victory=false)
+                if (onBattleEndCallback != null) {
+                    System.out.println("🏃 Calling battle end callback for flee");
+                    onBattleEndCallback.onBattleEnd(false, null);
+                } else {
+                    returnToTown();
+                }
             } else if (result.isBattleOver()) {
                 handleBattleEnd(result);
             } else {
@@ -733,7 +867,10 @@ public class BattleControllerFX {
     private void handleAbilityUse(String abilityName) {
         disableAllButtons();
 
-        AbilityDTO.BattleTurnResultDTO result = battleService.executeAbility(hero, enemy, abilityName);
+        // Use currentTarget for multi-battles, enemy for single battles
+        Inamic target = (isMultiBattle && currentTarget != null) ? currentTarget : enemy;
+
+        AbilityDTO.BattleTurnResultDTO result = battleService.executeAbility(hero, target, abilityName);
 
         if (!result.isSuccess()) {
             // Abilitatea nu a putut fi folosită
@@ -748,6 +885,12 @@ public class BattleControllerFX {
             handleBattleEnd(result);
         } else {
             updateUI(result.getCurrentState());
+
+            // Auto-select next alive enemy if current target died
+            if (isMultiBattle && multiBattleState != null && !target.esteViu()) {
+                autoSelectNextEnemy();
+            }
+
             enableAllButtons();
         }
     }
@@ -864,55 +1007,57 @@ public class BattleControllerFX {
 
         DialogHelper.showSuccess("Victorie!", victoryMsg.toString());
 
-        // Aplică recompensele
-        hero.adaugaGold(result.getGoldEarned());
-        // Aplică recompensele
-        hero.adaugaGold(result.getGoldEarned());
+        // 🆕 In dungeon mode with callback, DON'T add rewards directly to hero
+        // They will be stored temporarily in DungeonRun and only saved on escape
+        if (onBattleEndCallback == null) {
+            // Non-dungeon mode or old dungeon system - add rewards directly
+            System.out.println("💰 Adding rewards directly to hero (no callback)");
 
-// 🆕 LEVEL-UP UI FEEDBACK
-        int oldLevel = hero.getNivel(); // Salvează nivelul înainte de XP
-        hero.adaugaXp(result.getExperienceEarned()); // Aici se declanșează level-up automat
-        int newLevel = hero.getNivel(); // Nivelul după XP
+            hero.adaugaGold(result.getGoldEarned());
 
-// 🎉 DIALOG LEVEL-UP
-        if (newLevel > oldLevel) {
-            StringBuilder levelUpMsg = new StringBuilder();
-            levelUpMsg.append("🎉 LEVEL UP! 🎉 \n \n");
+            // 🆕 LEVEL-UP UI FEEDBACK
+            int oldLevel = hero.getNivel();
+            hero.adaugaXp(result.getExperienceEarned());
+            int newLevel = hero.getNivel();
 
-            if (newLevel - oldLevel > 1) {
-                levelUpMsg.append("🌟 MULTIPLE LEVEL UP! ").append(oldLevel).append(" → ").append(newLevel).append(" \n \n");
-            } else {
-                levelUpMsg.append("🌟 Noul nivel: ").append(newLevel).append(" \n \n");
+            // 🎉 DIALOG LEVEL-UP
+            if (newLevel > oldLevel) {
+                StringBuilder levelUpMsg = new StringBuilder();
+                levelUpMsg.append("🎉 LEVEL UP! 🎉 \n \n");
+
+                if (newLevel - oldLevel > 1) {
+                    levelUpMsg.append("🌟 MULTIPLE LEVEL UP! ").append(oldLevel).append(" → ").append(newLevel).append(" \n \n");
+                } else {
+                    levelUpMsg.append("🌟 Noul nivel: ").append(newLevel).append(" \n \n");
+                }
+
+                levelUpMsg.append("📈 Îmbunătățiri: \n");
+                levelUpMsg.append("💪 Stat Points noi: ").append(hero.getStatPoints()).append(" \n");
+                levelUpMsg.append("❤️  HP Maxim: ").append(hero.getViataMaxima()).append(" \n");
+                levelUpMsg.append("🔋 ").append(hero.getTipResursa()).append(" Maxim: ").append(hero.getResursaMaxima()).append(" \n \n");
+                levelUpMsg.append("💡 Vizitează Trainer-ul pentru stat upgrades!");
+
+                DialogHelper.showSuccess("🎉 LEVEL UP! 🎉", levelUpMsg.toString());
             }
 
-            levelUpMsg.append("📈 Îmbunătățiri: \n");
-            levelUpMsg.append("💪 Stat Points noi: ").append(hero.getStatPoints()).append(" \n");
-            levelUpMsg.append("❤️  HP Maxim: ").append(hero.getViataMaxima()).append(" \n");
-            levelUpMsg.append("🔋 ").append(hero.getTipResursa()).append(" Maxim: ").append(hero.getResursaMaxima()).append(" \n \n");
-            levelUpMsg.append("💡 Vizitează Trainer-ul pentru stat upgrades!");
-
-            // 🎊 DIALOG SPECIAL PENTRU LEVEL-UP
-            DialogHelper.showSuccess("🎉 LEVEL UP! 🎉", levelUpMsg.toString());
-        }
-
-// Restul reward-urilor...
-        if (result.getShaormaReward() > 0) {
-            hero.adaugaShaormaRevival(result.getShaormaReward());
-        }
-
-        if (result.getShaormaReward() > 0) {
-            hero.adaugaShaormaRevival(result.getShaormaReward());
-        }
-
-        if (result.hasLoot()) {
-            for (var item : result.getLoot()) {
-                hero.getInventar().addItem(item);
+            // Restul reward-urilor
+            if (result.getShaormaReward() > 0) {
+                hero.adaugaShaormaRevival(result.getShaormaReward());
             }
-        }
 
-        // 💎 Add jewel to inventory
-        if (result.hasJewelDrop()) {
-            hero.addJewel(result.getJewelDrop());
+            if (result.hasLoot()) {
+                for (var item : result.getLoot()) {
+                    hero.getInventar().addItem(item);
+                }
+            }
+
+            // 💎 Add jewel to inventory
+            if (result.hasJewelDrop()) {
+                hero.addJewel(result.getJewelDrop());
+            }
+        } else {
+            System.out.println("💼 Dungeon mode with callback: Rewards stored temporarily (not added to hero yet)");
+            System.out.println("   Gold: " + result.getGoldEarned() + ", Exp: " + result.getExperienceEarned() + ", Items: " + result.getLoot().size());
         }
 
         // 🆕 ALEGERI DUPĂ VICTORIE (only for old dungeon system without callbacks)
@@ -980,10 +1125,13 @@ public class BattleControllerFX {
         // Build defeat message
         StringBuilder defeatMsg = new StringBuilder();
         defeatMsg.append("💀 AI FOST ÎNVINS! 💀\n\n");
-        defeatMsg.append("Ucis de: ").append(enemy.getNume()).append("\n");
+        defeatMsg.append("Ucis de: ").append(enemy != null ? enemy.getNume() : "Unknown").append("\n");
 
         if (inDungeon) {
             defeatMsg.append("Depth: ").append(dungeonDepth).append("\n");
+            defeatMsg.append("\n⚠️ PENALITATE:\n");
+            defeatMsg.append("❌ Ai pierdut tot loot-ul temporar din run\n");
+            defeatMsg.append("❌ Ai pierdut 30% din gold\n");
         }
 
         defeatMsg.append("\n⚰️ Game Over\n");

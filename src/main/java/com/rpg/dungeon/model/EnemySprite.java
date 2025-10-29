@@ -18,12 +18,25 @@ public class EnemySprite implements Serializable {
 
     // AI State
     private EnemyState state = EnemyState.IDLE;
+    private EnemyType type = EnemyType.MELEE; // Enemy behavior type
     private double battleStartX = -1; // Position when battle started (for flee mechanics)
     private double battleStartY = -1;
     private long chaseResumeTime = 0; // Timestamp when enemy can resume chasing after flee
 
     // Movement
     private double moveSpeed = 1.5; // Pixels per frame when chasing
+
+    // Type-specific behavior timers
+    private double actionCooldown = 0; // Cooldown for special abilities (ranged attack, charge, etc.)
+    private boolean isCharging = false; // For charging enemies
+    private double chargeTargetX = 0;
+    private double chargeTargetY = 0;
+
+    // Type-specific modifiers (since we can't modify enemy stats directly)
+    private double damageMultiplier = 1.0; // Applied when calculating damage in combat
+
+    // Hazard invulnerability
+    private double hazardInvulnerabilityEndTime = 0; // Timestamp when invulnerability ends
 
     public EnemySprite(Inamic enemy, double x, double y) {
         this.enemy = enemy;
@@ -130,6 +143,38 @@ public class EnemySprite implements Serializable {
     public double getCenterX() { return x + width / 2; }
     public double getCenterY() { return y + height / 2; }
 
+    public EnemyType getType() { return type; }
+    public void setType(EnemyType type) { this.type = type; }
+
+    public double getActionCooldown() { return actionCooldown; }
+    public void setActionCooldown(double actionCooldown) { this.actionCooldown = actionCooldown; }
+
+    public boolean isCharging() { return isCharging; }
+    public void setCharging(boolean charging) { isCharging = charging; }
+
+    public double getChargeTargetX() { return chargeTargetX; }
+    public void setChargeTargetX(double chargeTargetX) { this.chargeTargetX = chargeTargetX; }
+
+    public double getChargeTargetY() { return chargeTargetY; }
+    public void setChargeTargetY(double chargeTargetY) { this.chargeTargetY = chargeTargetY; }
+
+    public double getDamageMultiplier() { return damageMultiplier; }
+    public void setDamageMultiplier(double damageMultiplier) { this.damageMultiplier = damageMultiplier; }
+
+    /**
+     * Check if enemy is invulnerable to hazard damage
+     */
+    public boolean isInvulnerableToHazards(double currentTime) {
+        return currentTime < hazardInvulnerabilityEndTime;
+    }
+
+    /**
+     * Set hazard invulnerability for a duration
+     */
+    public void setHazardInvulnerability(double currentTime, double duration) {
+        this.hazardInvulnerabilityEndTime = currentTime + duration;
+    }
+
     /**
      * Enemy AI states
      */
@@ -139,5 +184,16 @@ public class EnemySprite implements Serializable {
         IN_COMBAT,  // Currently in battle
         COOLDOWN,   // Cooldown after player fled
         DEFEATED    // Enemy is dead
+    }
+
+    /**
+     * Enemy behavior types
+     */
+    public enum EnemyType {
+        MELEE,      // Standard chasing enemy (current behavior)
+        RANGED,     // Keeps distance and shoots projectiles
+        CHARGER,    // Charges at player in straight line
+        TANKY,      // Slow but high HP, blocks paths
+        SUMMONER    // Spawns other enemies (future)
     }
 }

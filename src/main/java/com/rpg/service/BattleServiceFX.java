@@ -89,6 +89,12 @@ public class BattleServiceFX {
         // Reset cooldown-uri
         resetAbilityCooldowns(hero);
 
+        // Check if there are any enemies to fight
+        if (battleState.getActiveEnemyCount() == 0 && battleState.getReinforcementQueueSize() == 0) {
+            System.out.println("❌ ERROR: Attempted to start multi-battle with 0 enemies!");
+            throw new IllegalStateException("Cannot start battle with no enemies!");
+        }
+
         log("⚔️ MULTI-ENEMY BATTLE!");
         log(hero.getNume() + " vs " + battleState.getActiveEnemyCount() + " enemies!");
 
@@ -97,7 +103,11 @@ public class BattleServiceFX {
         }
 
         // Get first active enemy for initial display
-        Inamic firstEnemy = battleState.getActiveEnemies().get(0);
+        List<Inamic> activeEnemies = battleState.getActiveEnemies();
+        if (activeEnemies.isEmpty()) {
+            throw new IllegalStateException("No active enemies in battle state!");
+        }
+        Inamic firstEnemy = activeEnemies.get(0);
 
         return new BattleInitDTO(
                 hero.getNume(),
@@ -277,21 +287,29 @@ public class BattleServiceFX {
         // Check if target enemy died
         if (!targetEnemy.esteViu()) {
             logs.add("✅ " + targetEnemy.getNume() + " a fost învins!");
+        }
 
-            // Remove from battle state
-            for (int i = 0; i < MultiBattleState.MAX_ACTIVE_ENEMIES; i++) {
-                MultiBattleState.BattleSlot slot = multiBattleState.getSlot(i);
-                if (slot.getEnemy() == targetEnemy) {
-                    multiBattleState.removeEnemy(i);
-                    break;
-                }
+        // Clean up ALL dead enemies from slots
+        System.out.println("🧹 Before cleanup:");
+        for (int i = 0; i < MultiBattleState.MAX_ACTIVE_ENEMIES; i++) {
+            MultiBattleState.BattleSlot slot = multiBattleState.getSlot(i);
+            if (slot != null && slot.isActive() && slot.getEnemy() != null) {
+                System.out.println("  Slot " + i + ": " + slot.getEnemy().getNume() +
+                    " - HP: " + slot.getEnemy().getViata() + "/" + slot.getEnemy().getViataMaxima() +
+                    " - Alive: " + slot.getEnemy().esteViu());
             }
+        }
 
-            // Check if battle is over
-            if (multiBattleState.getActiveEnemyCount() == 0 && multiBattleState.getReinforcementQueueSize() == 0) {
-                logs.add("🎉 All enemies defeated!");
-                return finalizeMultiBattle(hero, true, logs);
-            }
+        multiBattleState.cleanupDeadEnemies();
+
+        System.out.println("🧹 After cleanup:");
+        System.out.println("  Active enemies: " + multiBattleState.getActiveEnemyCount());
+        System.out.println("  Reinforcements: " + multiBattleState.getReinforcementQueueSize());
+
+        // Check if battle is over (no alive enemies and no reinforcements)
+        if (multiBattleState.getActiveEnemyCount() == 0 && multiBattleState.getReinforcementQueueSize() == 0) {
+            logs.add("🎉 All enemies defeated!");
+            return finalizeMultiBattle(hero, true, logs);
         }
 
         // All alive enemies attack
@@ -932,54 +950,49 @@ public class BattleServiceFX {
             List<com.rpg.model.items.ObiectEchipament> allLoot = new ArrayList<>();
             com.rpg.model.items.Jewel jewelDrop = null;
 
-            // Collect rewards from all slots
-            for (MultiBattleState.BattleSlot slot : multiBattleState.getSlots()) {
-                if (slot.getEnemy() != null) {
-                    Inamic enemy = slot.getEnemy();
-                    totalGold += enemy.getGoldReward();
-                    totalExp += enemy.getExpReward();
+            // Collect rewards from defeated enemies list
+            List<Inamic> defeatedEnemies = multiBattleState.getDefeatedEnemies();
+            System.out.println("💰 Calculating rewards from " + defeatedEnemies.size() + " defeated enemies");
 
-                    if (enemy.getLoot() != null) {
-                        allLoot.addAll(enemy.getLoot());
+            for (Inamic enemy : defeatedEnemies) {
+                System.out.println("  - " + enemy.getNume() + ": " + enemy.getGoldReward() + " gold, " + enemy.getExpReward() + " exp");
+                totalGold += enemy.getGoldReward();
+                totalExp += enemy.getExpReward();
+
+                if (enemy.getLoot() != null) {
+                    allLoot.addAll(enemy.getLoot());
+                }
+
+                if (enemy.isBoss()) {
+                    totalShaorma += enemy.getShaormaReward();
+
+                    // Boss jewel drop
+                    if (jewelDrop == null) {
+                        jewelDrop = LootGenerator.rollBossJewelDrop(enemy.getNivel());
                     }
 
-                    if (enemy.isBoss()) {
-                        totalShaorma += enemy.getShaormaReward();
+                    // Boss flask pieces
+                    logs.add("\n🧪 ════════════════════════════════════════");
+                    logs.add("🧪 FLASK PIECE DROP!");
+                    logs.add("🧪 ════════════════════════════════════════");
 
-                        // Boss jewel drop
-                        if (jewelDrop == null) {
-                            jewelDrop = LootGenerator.rollBossJewelDrop(enemy.getNivel());
-                        }
+                    com.rpg.model.items.FlaskPiece.FlaskType[] types = com.rpg.model.items.FlaskPiece.FlaskType.values();
+                    com.rpg.model.items.FlaskPiece.FlaskType randomType = types[new java.util.Random().nextInt(types.length)];
+                    int quantity = 1 + new java.util.Random().nextInt(2);
 
-                        // Boss flask pieces
-                        logs.add("\n🧪 ════════════════════════════════════════");
-                        logs.add("🧪 FLASK PIECE DROP!");
-                        logs.add("🧪 ════════════════════════════════════════");
-
-                        com.rpg.model.items.FlaskPiece.FlaskType[] types = com.rpg.model.items.FlaskPiece.FlaskType.values();
-                        com.rpg.model.items.FlaskPiece.FlaskType randomType = types[new java.util.Random().nextInt(types.length)];
-                        int quantity = 1 + new java.util.Random().nextInt(2);
-
-                        hero.addFlaskPieces(randomType, quantity);
-                        logs.add(String.format("🧪 Ai primit %d x %s Flask Piece!", quantity, randomType.getIcon()));
-                    }
+                    hero.addFlaskPieces(randomType, quantity);
+                    logs.add(String.format("🧪 Ai primit %d x %s Flask Piece!", quantity, randomType.getIcon()));
                 }
             }
 
             // Roll for jewel if no boss (regular jewel drop)
-            if (jewelDrop == null) {
-                int avgLevel = 1;
-                int enemyCount = 0;
-                for (MultiBattleState.BattleSlot slot : multiBattleState.getSlots()) {
-                    if (slot.getEnemy() != null) {
-                        avgLevel += slot.getEnemy().getNivel();
-                        enemyCount++;
-                    }
+            if (jewelDrop == null && defeatedEnemies.size() > 0) {
+                int avgLevel = 0;
+                for (Inamic enemy : defeatedEnemies) {
+                    avgLevel += enemy.getNivel();
                 }
-                if (enemyCount > 0) {
-                    avgLevel = avgLevel / enemyCount;
-                    jewelDrop = LootGenerator.rollRegularJewelDrop(avgLevel);
-                }
+                avgLevel = avgLevel / defeatedEnemies.size();
+                jewelDrop = LootGenerator.rollRegularJewelDrop(avgLevel);
             }
 
             if (jewelDrop != null) {

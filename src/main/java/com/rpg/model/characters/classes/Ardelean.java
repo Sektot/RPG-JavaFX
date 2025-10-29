@@ -43,66 +43,119 @@ public class Ardelean extends com.rpg.model.characters.Erou implements Serializa
     public void initializeazaAbilitati() {
         abilitati.clear();
 
-        // 1. Săgeata Magică - atac basic magic
-        Abilitate sageata = new Abilitate("Testicular Torsion", 12, Arrays.asList("magical"), 15, 0, 85,
-                Map.of("intelligence", 1.4), null, 0, 0);
+        // ==================== BASIC ABILITIES (Level 1) ====================
+
+        // 1. 🔮 Săgeată Arcanică - Basic magic missile (low cost, reliable)
+        Abilitate sageata = new Abilitate("Săgeată Arcanică", 12, Arrays.asList("magical"), 10, 0, 92,
+                Map.of("intelligence", 1.3), null, 0, 0);
+        sageata.setAbilityType(AbilityType.OFFENSIVE)
+                .setRequiredLevel(1);
         abilitati.add(sageata);
 
-        // 2. Mămăligă Fierbinte - fireball
-        Abilitate mamaliga = new Abilitate("Mămăligă Fierbinte", 18, Arrays.asList("magical"), 25, 3, 75,
-                Map.of("intelligence", 1.8), "Burn", 3, 4);
-        abilitati.add(mamaliga);
+        // 2. 🔥 Minge de Foc - Fireball with burn DoT
+        Abilitate foc = new Abilitate("Minge de Foc", 20, Arrays.asList("magical", "fire"), 20, 2, 85,
+                Map.of("intelligence", 1.6), "Burn", 3, 5);
+        foc.setAbilityType(AbilityType.OFFENSIVE)
+                .setRequiredLevel(1);
+        abilitati.add(foc);
 
-        // 3. Scutul Corvinilor - mana shield
-        Abilitate scut = new Abilitate("VPN din Brașov", 0, Arrays.asList("magical"), 30, 5, 100,
-                Map.of("intelligence", 0.5), null, 0, 0);
-        scut.setBuff("ScutCorvini", 4, Map.of("defense", 1.3, "magic_resistance", 1.5));
-        abilitati.add(scut);
+        // 3. 🛡️ Barieră Magică - Mana shield
+        Abilitate bariera = new Abilitate("Barieră Magică", 0, Arrays.asList("magical"), 25, 4, 100,
+                Map.of("intelligence", 0.4), null, 0, 0);
+        bariera.setAbilityType(AbilityType.BUFF)
+                .setRequiredLevel(1)
+                .setBuff("BarieraMagica", 3, Map.of("defense", 1.3, "magic_resistance", 1.4));
+        abilitati.add(bariera);
     }
 
     @Override
     public Abilitate abilitateSpecialaNivel(int nivel) {
         return switch (nivel) {
-            case 5 -> {
-                // Gheața Apusenilor - ice spike
-                Abilitate gheata = new Abilitate("Geata din Frigider", 20, Arrays.asList("magical"), 35, 2, 80,
-                        Map.of("intelligence", 1.6), "Freeze", 2, 0);
+            case 3 -> {
+                // ❄️ Gheață Ascuțită - Ice shard (freeze + damage)
+                Abilitate gheata = new Abilitate("Gheață Ascuțită", 25, Arrays.asList("magical", "ice"), 30, 2, 88,
+                        Map.of("intelligence", 1.7), "Freeze", 2, 0);
+                gheata.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(3);
                 yield gheata;
             }
 
+            case 5 -> {
+                // 💫 Explozie Arcanică - AOE blast
+                Abilitate explozie = new Abilitate("Explozie Arcanică", 30, Arrays.asList("magical", "arcane"), 40, 3, 83,
+                        Map.of("intelligence", 1.8), null, 0, 0);
+                explozie.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(5)
+                        .setAOE(true)
+                        .setNumberOfHits(2);  // Hits twice
+                yield explozie;
+            }
+
+            case 8 -> {
+                // 💙 Sifon de Mană - Mana steal ability
+                Abilitate sifon = new Abilitate("Sifon de Mană", 18, Arrays.asList("magical"), 15, 3, 90,
+                        Map.of("intelligence", 1.4), null, 0, 0);
+                sifon.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(8)
+                        .setResourceGenerated(30);  // Restores 30 mana on hit!
+                yield sifon;
+            }
+
             case 10 -> {
-                // Fulgerul din Retezat - chain lightning
-                Abilitate fulger = new Abilitate("Curent Monofazat", 16, Arrays.asList("magical"), 40, 3, 78,
-                        Map.of("intelligence", 1.5), "Shock", 2, 3);
+                // ⚡ Lanț de Fulgere - Chain lightning
+                Abilitate fulger = new Abilitate("Lanț de Fulgere", 22, Arrays.asList("magical", "lightning"), 45, 3, 85,
+                        Map.of("intelligence", 1.6), "Shock", 2, 4);
+                fulger.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(10)
+                        .setNumberOfHits(3)  // Hits 3 targets
+                        .setAOE(true);
                 yield fulger;
             }
 
             case 15 -> {
-                // Trăsnetul Solomonarului - lightning bolt
-                Abilitate trasnet = new Abilitate("Curent Trifazat", 35, Arrays.asList("magical"), 50, 3, 82,
-                        Map.of("intelligence", 2.2), null, 0, 0);
-                yield trasnet;
+                // 🧙 Putere Magică - Mana surge buff
+                Abilitate putere = new Abilitate("Putere Magică", 0, Arrays.asList("magical"), 50, 5, 100,
+                        Map.of("intelligence", 0.5), null, 0, 0);
+                putere.setAbilityType(AbilityType.BUFF)
+                        .setRequiredLevel(15)
+                        .setBuff("PutereMagica", 4, Map.of("intelligence", 1.5, "crit_chance", 1.3, "spell_power", 1.4));
+                yield putere;
             }
 
             case 20 -> {
-                // Explozia de la Cluj - arcane explosion
-                Abilitate explozie = new Abilitate("Explozia de la Cluj", 25, Arrays.asList("magical"), 45, 4, 79,
-                        Map.of("intelligence", 1.9), "Silence", 3, 0);
-                yield explozie;
+                // 🌟 Rază Prismatică - Multi-element beam
+                Abilitate raza = new Abilitate("Rază Prismatică", 50, Arrays.asList("magical", "fire", "ice", "lightning"), 60, 4, 87,
+                        Map.of("intelligence", 2.3), null, 0, 0);
+                raza.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(20)
+                        .setNumberOfHits(3);  // Tri-elemental beam
+                yield raza;
             }
 
             case 25 -> {
-                // Meteoritul Ardealului - meteor
-                Abilitate meteor = new Abilitate("Downclock Solar", 45, Arrays.asList("magical"), 70, 5, 77,
-                        Map.of("intelligence", 2.5), "Burn", 4, 6);
+                // ☄️ Meteorit - Massive AOE damage + burn
+                Abilitate meteor = new Abilitate("Meteorit", 65, Arrays.asList("magical", "fire"), 75, 5, 82,
+                        Map.of("intelligence", 2.7), "Burn", 4, 8);
+                meteor.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(25)
+                        .setAOE(true)
+                        .setComboRequirement("Minge de Foc")  // Must use Fireball first
+                        .setComboBonusDamage(0.6);  // +60% damage if combo'd
                 yield meteor;
             }
 
             case 30 -> {
-                // Puterea Dacilor - ultimate spell
-                Abilitate daci = new Abilitate("Mass Curse", 60, Arrays.asList("magical"), 90, 7, 80,
-                        Map.of("intelligence", 3.0), "Curse", 5, 10);
-                yield daci;
+                // 🌌 ULTIMATE: Maelstrom Arcanic - Ultimate spell storm
+                Abilitate ult = new Abilitate("Maelstrom Arcanic", 90, Arrays.asList("magical", "arcane", "legendary"), 100, 10, 90,
+                        Map.of("intelligence", 3.5), "Silence", 3, 15);
+                ult.setAbilityType(AbilityType.OFFENSIVE)
+                        .setRequiredLevel(30)
+                        .setUltimate(true)
+                        .setAOE(true)
+                        .setNumberOfHits(7)  // Hits 7 times!
+                        .setResourceGenerated(50)  // Restores 50 mana
+                        .setBuff("MaelstromPower", 3, Map.of("intelligence", 1.7, "crit_damage", 1.6, "mana_regen", 2.0));
+                yield ult;
             }
 
             default -> null;

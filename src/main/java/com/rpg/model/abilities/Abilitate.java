@@ -39,7 +39,34 @@ public class Abilitate implements Serializable {
     private static final int MAX_UPGRADE = 5;
 
     private static final int BASE_DAMAGE_INCREMENT = 5;      // +5 damage per upgrade
-    private static final int BASE_HITCHANCE_INCREMENT = 3;   // +3% hit chance per
+    private static final int BASE_HITCHANCE_INCREMENT = 3;   // +3% hit chance per upgrade
+
+    // 🆕 Ultimate ability properties
+    private boolean isUltimate = false;
+    private int requiredLevel = 1;  // Level required to unlock
+
+    // 🆕 Passive ability properties
+    private boolean isPassive = false;
+
+    // 🆕 Combo system
+    private String comboRequirement = null;  // Name of ability that must be used first
+    private double comboBonusDamage = 0.0;   // Bonus damage multiplier when combo'd
+
+    // 🆕 Resource generation (for abilities that generate resources)
+    private int resourceGenerated = 0;  // Amount of rage/energy/mana generated
+
+    // 🆕 Self-damage (for berserker-style abilities)
+    private int selfDamage = 0;
+
+    // 🆕 Healing
+    private int healAmount = 0;
+    private double healPercent = 0.0;  // Percentage of max HP to heal
+
+    // 🆕 Multi-hit abilities
+    private int numberOfHits = 1;
+
+    // 🆕 AOE abilities
+    private boolean isAOE = false;
 
     /**
      * Constructor complet pentru o abilitate.
@@ -209,5 +236,85 @@ public class Abilitate implements Serializable {
     @Override
     public int hashCode() {
         return nume != null ? nume.hashCode() : 0;
+    }
+
+    // 🆕 Getters and setters for new properties
+
+    public boolean isUltimate() { return isUltimate; }
+    public Abilitate setUltimate(boolean ultimate) {
+        isUltimate = ultimate;
+        return this;
+    }
+
+    public int getRequiredLevel() { return requiredLevel; }
+    public Abilitate setRequiredLevel(int level) {
+        requiredLevel = level;
+        return this;
+    }
+
+    public boolean isPassive() { return isPassive; }
+    public Abilitate setPassive(boolean passive) {
+        isPassive = passive;
+        return this;
+    }
+
+    public String getComboRequirement() { return comboRequirement; }
+    public Abilitate setComboRequirement(String requirement) {
+        comboRequirement = requirement;
+        return this;
+    }
+
+    public double getComboBonusDamage() { return comboBonusDamage; }
+    public Abilitate setComboBonusDamage(double bonus) {
+        comboBonusDamage = bonus;
+        return this;
+    }
+
+    public int getResourceGenerated() { return resourceGenerated; }
+    public Abilitate setResourceGenerated(int amount) {
+        resourceGenerated = amount;
+        return this;
+    }
+
+    public int getSelfDamage() { return selfDamage; }
+    public Abilitate setSelfDamage(int damage) {
+        selfDamage = damage;
+        return this;
+    }
+
+    public int getHealAmount() { return healAmount; }
+    public Abilitate setHealAmount(int amount) {
+        healAmount = amount;
+        return this;
+    }
+
+    public double getHealPercent() { return healPercent; }
+    public Abilitate setHealPercent(double percent) {
+        healPercent = percent;
+        return this;
+    }
+
+    public int getNumberOfHits() { return numberOfHits; }
+    public Abilitate setNumberOfHits(int hits) {
+        numberOfHits = Math.max(1, hits);
+        return this;
+    }
+
+    public boolean isAOE() { return isAOE; }
+    public Abilitate setAOE(boolean aoe) {
+        isAOE = aoe;
+        return this;
+    }
+
+    public AbilityType getAbilityType() { return abilityType; }
+    public Abilitate setAbilityType(AbilityType type) {
+        abilityType = type;
+        return this;
+    }
+
+    public List<String> getTipuriDamage() { return new ArrayList<>(tipuriDamage); }
+
+    public Map<String, Double> getInfluentaStatistici() {
+        return new HashMap<>(influentaStatistici);
     }
 }

@@ -7,20 +7,30 @@ import com.rpg.service.ShopServiceFX.ShopCategory;
 import com.rpg.service.dto.PurchaseResult;
 import com.rpg.service.dto.ShopItemDTO;
 import com.rpg.utils.DialogHelper;
+import com.rpg.utils.SpriteManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
 import java.util.List;
 
 /**
  * Controller pentru interfața Shop-ului în JavaFX
+ *
+ * 🎨 SPRITE SUPPORT:
+ * Place UI sprites in: resources/sprites/ui/shop/
+ * - background.png - Shop background
+ * - header_bg.png - Header background
+ * - panel_left_bg.png - Left panel background
+ * - panel_right_bg.png - Right panel background
+ * - button_buy.png / button_buy_hover.png
+ * - button_back.png / button_back_hover.png
+ * - item_frame.png - Optional item display frame
  */
 public class ShopController {
 
@@ -36,22 +46,67 @@ public class ShopController {
     private Button buyButton;
     private ComboBox<ShopCategory> categoryComboBox;
 
+    // 🎨 UI Textures
+    private Image backgroundTexture;
+    private Image headerBgTexture;
+    private Image panelBgTexture;
+    private Image buttonBuyTexture;
+    private Image buttonBuyHoverTexture;
+    private Image buttonBackTexture;
+    private Image buttonBackHoverTexture;
+
     public ShopController(Stage stage, Erou hero) {
         this.stage = stage;
         this.hero = hero;
         this.shopService = new ShopServiceFX();
+        loadTextures();
+    }
+
+    /**
+     * 🎨 Load all UI textures
+     */
+    private void loadTextures() {
+        backgroundTexture = SpriteManager.getSprite("ui/shop", "background");
+        headerBgTexture = SpriteManager.getSprite("ui/shop", "header_bg");
+        panelBgTexture = SpriteManager.getSprite("ui/shop", "panel_bg");
+        buttonBuyTexture = SpriteManager.getSprite("ui/shop", "button_buy");
+        buttonBuyHoverTexture = SpriteManager.getSprite("ui/shop", "button_buy_hover");
+        buttonBackTexture = SpriteManager.getSprite("ui/shop", "button_back");
+        buttonBackHoverTexture = SpriteManager.getSprite("ui/shop", "button_back_hover");
     }
 
     public Scene createScene() {
+        // 🎨 Use StackPane to layer background texture
+        StackPane mainContainer = new StackPane();
+
+        // Add background if available
+        if (backgroundTexture != null) {
+            ImageView backgroundView = new ImageView(backgroundTexture);
+            backgroundView.setPreserveRatio(false);
+            mainContainer.getChildren().add(backgroundView);
+
+            // Bind background size to scene
+            Scene scene = new Scene(mainContainer, 1000, 700);
+            backgroundView.fitWidthProperty().bind(scene.widthProperty());
+            backgroundView.fitHeightProperty().bind(scene.heightProperty());
+        }
+
         BorderPane root = new BorderPane();
         root.setTop(createHeader());
         root.setCenter(createMainContent());
         root.setBottom(createFooter());
 
-        // Styling
-        root.setStyle("-fx-background-color: #2c3e50;");
+        // Only use solid color if no background texture
+        if (backgroundTexture == null) {
+            root.setStyle("-fx-background-color: #2c3e50;");
+        } else {
+            root.setStyle("-fx-background-color: transparent;");
+        }
 
-        return new Scene(root, 1000, 700);
+        mainContainer.getChildren().add(root);
+
+        Scene scene = new Scene(mainContainer, 1000, 700);
+        return scene;
     }
 
     /**

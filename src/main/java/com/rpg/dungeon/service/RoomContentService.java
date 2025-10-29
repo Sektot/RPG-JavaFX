@@ -49,8 +49,11 @@ public class RoomContentService {
             case SHOP:
                 // TODO: Populate shop
                 break;
+            case START:
+                populateStartRoom(room);
+                break;
             default:
-                // START și EMPTY nu au nevoie de conținut
+                // EMPTY nu are nevoie de conținut
                 break;
         }
     }
@@ -110,6 +113,14 @@ public class RoomContentService {
                 double y = margin + random.nextDouble() * (roomHeight - 2 * margin);
 
                 EnemySprite enemySprite = new EnemySprite(enemy, x, y);
+
+                // Assign enemy type based on depth and randomness
+                EnemySprite.EnemyType assignedType = assignEnemyType(depth, random);
+                enemySprite.setType(assignedType);
+
+                // Adjust stats based on type
+                applyEnemyTypeModifiers(enemySprite, assignedType);
+
                 room.addEnemy(enemySprite);
 
                 // Set first enemy as legacy single enemy for backwards compatibility
@@ -117,6 +128,11 @@ public class RoomContentService {
                     room.setEnemy(enemy);
                 }
             }
+        }
+
+        // Add hazards to combat rooms (not boss rooms)
+        if (!isBoss) {
+            spawnHazards(room, depth, random);
         }
     }
 
@@ -369,5 +385,168 @@ public class RoomContentService {
 
         // Returnează un item aleatoriu din rarity-ul cerut
         return possibleItems.get((int)(Math.random() * possibleItems.size()));
+    }
+
+    /**
+     * Populează camera de start cu un portal de escape
+     */
+    private void populateStartRoom(Room room) {
+        // Add escape portal in the center-bottom of the room
+        InteractiveObject escapePortal = new InteractiveObject(
+            InteractiveObject.ObjectType.PORTAL,
+            350, // Center horizontally (800px wide room, 64px portal = (800-64)/2 = 368, rounded to 350)
+            450  // Bottom area (600px tall room, place at 450)
+        );
+        escapePortal.setData("ESCAPE_PORTAL"); // Mark this as escape portal vs boss portal
+        room.addObject(escapePortal);
+    }
+
+    /**
+     * Assign enemy type based on depth
+     * Early depths: mostly melee
+     * Later depths: more variety with ranged, chargers, tanks
+     */
+    private EnemySprite.EnemyType assignEnemyType(int depth, Random random) {
+        // Depth 1-2: 90% melee, 10% charger
+        if (depth <= 2) {
+            return random.nextDouble() < 0.9 ? EnemySprite.EnemyType.MELEE : EnemySprite.EnemyType.CHARGER;
+        }
+
+        // Depth 3-4: 60% melee, 20% ranged, 20% charger
+        if (depth <= 4) {
+            double roll = random.nextDouble();
+            if (roll < 0.6) return EnemySprite.EnemyType.MELEE;
+            if (roll < 0.8) return EnemySprite.EnemyType.RANGED;
+            return EnemySprite.EnemyType.CHARGER;
+        }
+
+        // Depth 5+: 40% melee, 30% ranged, 20% charger, 10% tanky
+        double roll = random.nextDouble();
+        if (roll < 0.4) return EnemySprite.EnemyType.MELEE;
+        if (roll < 0.7) return EnemySprite.EnemyType.RANGED;
+        if (roll < 0.9) return EnemySprite.EnemyType.CHARGER;
+        return EnemySprite.EnemyType.TANKY;
+    }
+
+    /**
+     * Apply stat modifiers based on enemy type
+     * Note: Since enemy HP and damage are not directly modifiable,
+     * we use multipliers stored in EnemySprite
+     */
+    private void applyEnemyTypeModifiers(EnemySprite sprite, EnemySprite.EnemyType type) {
+        switch (type) {
+            case MELEE:
+                // Standard stats - balanced
+                sprite.setMoveSpeed(1.5);
+                sprite.setDamageMultiplier(1.0);
+                break;
+
+            case RANGED:
+                // Slower, keeps distance, lower melee damage (shoots from afar)
+                sprite.setMoveSpeed(1.0);
+                sprite.setDamageMultiplier(0.7); // Less damage in melee combat
+                break;
+
+            case CHARGER:
+                // Fast, charges in straight lines, higher impact damage
+                sprite.setMoveSpeed(2.0);
+                sprite.setDamageMultiplier(1.2); // Hits harder when connecting
+                break;
+
+            case TANKY:
+                // Slow but hits hard, acts as blocker
+                sprite.setMoveSpeed(0.8);
+                sprite.setDamageMultiplier(1.3); // High damage output
+                break;
+
+            case SUMMONER:
+                // Future implementation - will summon minions
+                sprite.setMoveSpeed(1.0);
+                sprite.setDamageMultiplier(0.9); // Slightly weaker direct combat
+                break;
+        }
+    }
+
+    /**
+     * Spawn environmental hazards in a room based on depth
+     * Higher depths have more and deadlier hazards
+     */
+    private void spawnHazards(Room room, int depth, Random random) {
+        // Room dimensions for spawning (assuming 800x600 room size)
+        double roomWidth = 800;
+        double roomHeight = 600;
+        double wallThickness = 20;
+        double margin = 80; // Keep hazards away from edges and spawn points
+
+        // Determine hazard count based on depth
+        int hazardCount = 0;
+        if (depth >= 5) {
+            // Depth 5+: 2-4 hazards
+            hazardCount = 2 + random.nextInt(3);
+        } else if (depth >= 3) {
+            // Depth 3-4: 1-3 hazards
+            hazardCount = 1 + random.nextInt(3);
+        } else if (depth >= 2) {
+            // Depth 2: 0-2 hazards
+            hazardCount = random.nextInt(3);
+        }
+        // Depth 1: no hazards
+
+        for (int i = 0; i < hazardCount; i++) {
+            // Choose hazard type based on depth
+            Hazard.HazardType type = chooseHazardType(depth, random);
+
+            // Determine hazard size based on type
+            double width, height;
+            switch (type) {
+                case SPIKES -> {
+                    // Spikes are smaller, more precise
+                    width = 40 + random.nextDouble() * 30; // 40-70px
+                    height = 40 + random.nextDouble() * 30;
+                }
+                case FIRE_PIT -> {
+                    // Fire pits are medium-sized circles
+                    width = 60 + random.nextDouble() * 40; // 60-100px
+                    height = width; // Circular
+                }
+                case POISON_GAS -> {
+                    // Poison clouds are large areas
+                    width = 80 + random.nextDouble() * 80; // 80-160px
+                    height = 80 + random.nextDouble() * 80;
+                }
+                default -> {
+                    width = 50;
+                    height = 50;
+                }
+            }
+
+            // Random position within room bounds, avoiding edges
+            double x = margin + random.nextDouble() * (roomWidth - 2 * margin - width);
+            double y = margin + random.nextDouble() * (roomHeight - 2 * margin - height);
+
+            Hazard hazard = new Hazard(x, y, width, height, type);
+            room.addHazard(hazard);
+        }
+    }
+
+    /**
+     * Choose hazard type based on depth and randomness
+     */
+    private Hazard.HazardType chooseHazardType(int depth, Random random) {
+        // Depth 1-2: Only spikes
+        if (depth <= 2) {
+            return Hazard.HazardType.SPIKES;
+        }
+
+        // Depth 3-4: 60% spikes, 40% fire
+        if (depth <= 4) {
+            return random.nextDouble() < 0.6 ? Hazard.HazardType.SPIKES : Hazard.HazardType.FIRE_PIT;
+        }
+
+        // Depth 5+: 40% spikes, 40% fire, 20% poison
+        double roll = random.nextDouble();
+        if (roll < 0.4) return Hazard.HazardType.SPIKES;
+        if (roll < 0.8) return Hazard.HazardType.FIRE_PIT;
+        return Hazard.HazardType.POISON_GAS;
     }
 }

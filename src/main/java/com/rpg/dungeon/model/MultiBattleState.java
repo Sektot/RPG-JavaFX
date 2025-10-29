@@ -22,6 +22,9 @@ public class MultiBattleState implements Serializable {
     // Reinforcement queue (enemies waiting to join)
     private Queue<ReinforcementEntry> reinforcementQueue = new LinkedList<>();
 
+    // Track defeated enemies for reward calculation
+    private List<Inamic> defeatedEnemies = new ArrayList<>();
+
     // Battle state
     private int currentTurn = 0;
     private boolean battleActive = false;
@@ -86,23 +89,53 @@ public class MultiBattleState implements Serializable {
      */
     public void removeEnemy(int slotIndex) {
         if (slotIndex >= 0 && slotIndex < MAX_ACTIVE_ENEMIES) {
+            Inamic enemy = slots[slotIndex].getEnemy();
+
+            // Save defeated enemy for reward calculation
+            if (enemy != null && !enemy.esteViu()) {
+                defeatedEnemies.add(enemy);
+                System.out.println("💀 Saved defeated enemy for rewards: " + enemy.getNume());
+            }
+
             slots[slotIndex].setEnemy(null);
             slots[slotIndex].setActive(false);
+
+            System.out.println("🗑️ Removed enemy from slot " + slotIndex);
 
             // Check if battle is over
             if (getActiveEnemyCount() == 0 && reinforcementQueue.isEmpty()) {
                 battleActive = false;
+                System.out.println("✅ All enemies defeated! Battle over.");
             }
         }
     }
 
     /**
-     * Get number of active enemies
+     * Clean up all dead enemies from slots
+     */
+    public void cleanupDeadEnemies() {
+        for (int i = 0; i < MAX_ACTIVE_ENEMIES; i++) {
+            if (slots[i].isActive() && slots[i].getEnemy() != null && !slots[i].getEnemy().esteViu()) {
+                System.out.println("🧹 Cleaning up dead enemy from slot " + i + ": " + slots[i].getEnemy().getNume());
+                removeEnemy(i);
+            }
+        }
+    }
+
+    /**
+     * Get all defeated enemies (for reward calculation)
+     */
+    public List<Inamic> getDefeatedEnemies() {
+        return new ArrayList<>(defeatedEnemies);
+    }
+
+    /**
+     * Get number of active enemies (alive only)
      */
     public int getActiveEnemyCount() {
         int count = 0;
         for (BattleSlot slot : slots) {
-            if (slot.isActive() && slot.getEnemy() != null) {
+            if (slot.isActive() && slot.getEnemy() != null && slot.getEnemy().esteViu()) {
                 count++;
             }
         }
@@ -110,12 +143,12 @@ public class MultiBattleState implements Serializable {
     }
 
     /**
-     * Get all active enemies
+     * Get all active enemies (alive only)
      */
     public List<Inamic> getActiveEnemies() {
         List<Inamic> enemies = new ArrayList<>();
         for (BattleSlot slot : slots) {
-            if (slot.isActive() && slot.getEnemy() != null) {
+            if (slot.isActive() && slot.getEnemy() != null && slot.getEnemy().esteViu()) {
                 enemies.add(slot.getEnemy());
             }
         }
