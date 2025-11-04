@@ -40,7 +40,7 @@ public class TavernControllerFX {
 
         root.setStyle("-fx-background-color: #2c1810;");
 
-        return new Scene(root, 1000, 700);
+        return new Scene(root, 1900, 1080);
     }
 
     /**

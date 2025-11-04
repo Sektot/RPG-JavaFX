@@ -1,6 +1,8 @@
 package com.rpg.model.characters;
 
 import com.rpg.model.effects.DebuffStack;
+import com.rpg.model.enemies.EnemyAffix;
+import com.rpg.model.enemies.EnemyTier;
 import com.rpg.model.items.ObiectEchipament;
 import com.rpg.service.LootGenerator;
 import com.rpg.utils.GameConstants;
@@ -49,6 +51,33 @@ public class Inamic implements Serializable {
     private final List<String> abilitatiSpeciale;
 
     private int regenerareViata = 0;
+
+    // 🆕 Elite tier and affix system
+    private EnemyTier tier = EnemyTier.NORMAL;
+    private List<EnemyAffix> affixes = new ArrayList<>();
+
+    // Affix state tracking
+    private boolean hasShield = false;
+    private int shieldHealth = 0;
+    private boolean hasTeleported = false;
+    private boolean hasSummonedMinion = false;
+
+    // 🆕 Enemy archetype system
+    private com.rpg.model.enemies.EnemyArchetype archetype = null;
+
+    // 🆕 Enemy ability system
+    private List<com.rpg.model.enemies.EnemyAbility> abilities = new ArrayList<>();
+    private Map<com.rpg.model.enemies.EnemyAbility, Integer> abilityCooldowns = new HashMap<>();
+
+    // Ability buff/debuff tracking
+    private int abilityDamageReductionTurns = 0;  // Shield Wall
+    private double abilityDamageReductionAmount = 0.0;
+    private int abilityDamageBuffTurns = 0;  // Battle Cry, Enrage
+    private double abilityDamageBuffAmount = 0.0;
+    private int abilityDefenseDebuffTurns = 0;  // Desperate Gambit
+    private double abilityDefenseDebuffAmount = 0.0;
+    private boolean abilityEvasionActive = false;  // Evasion ability
+    private int abilityEvasionTurns = 0;
 
 
     // constructor cu parametri necesari pt enemy generator
@@ -313,6 +342,65 @@ public class Inamic implements Serializable {
     }
 
     /**
+     * Procesează debuff-urile și returnează loguri pentru UI.
+     * Similar cu actualizeazaStari() dar returnează lista de evenimente.
+     */
+    public java.util.List<String> processDebuffsWithLogs() {
+        java.util.List<String> logs = new java.util.ArrayList<>();
+
+        // Procesează debuff-urile active
+        debuffuriActive.entrySet().removeIf(entry -> {
+            String debuffName = entry.getKey();
+            DebuffStack debuff = entry.getValue();
+
+            if (debuff.getEffects().containsKey("damage_per_turn")) {
+                int dotDamage = debuff.getEffects().get("damage_per_turn").intValue();
+                if (dotDamage > 0) {
+                    viata = Math.max(0, viata - dotDamage);
+
+                    // Add to logs for UI
+                    String icon = getDebuffIcon(debuffName);
+                    logs.add(icon + " " + nume + " takes " + dotDamage + " damage from " + debuffName + "!");
+
+                    if (!esteViu()) {
+                        logs.add("💀 " + nume + " died from " + debuffName + "!");
+                    }
+                }
+            }
+
+            debuff.decreaseDuration();
+
+            if (!debuff.isActive()) {
+                logs.add("⏰ " + debuffName + " expired on " + nume);
+                return true;
+            }
+
+            return false;
+        });
+
+        // Regenerarea pentru boss-uri și inamici cu regenerare
+        if ((boss || regenerareViata > 0) && viata > 0 && viata < viataMaxima) {
+            int regenAmount = boss ? Math.max(1, viataMaxima / 50) : regenerareViata;
+            vindeca(regenAmount);
+            if (regenAmount > 0) {
+                logs.add("💚 " + nume + " regenerates " + regenAmount + " HP!");
+            }
+        }
+
+        return logs;
+    }
+
+    private String getDebuffIcon(String debuffName) {
+        String lower = debuffName.toLowerCase();
+        if (lower.contains("burn") || lower.contains("fire")) return "🔥";
+        if (lower.contains("poison")) return "☠️";
+        if (lower.contains("bleed")) return "🩸";
+        if (lower.contains("freeze") || lower.contains("ice")) return "❄️";
+        if (lower.contains("shock") || lower.contains("lightning")) return "⚡";
+        return "💀";
+    }
+
+    /**
      * Setează starea de inspecție.
      */
     public void setInspectat(boolean inspectat) {
@@ -327,7 +415,7 @@ public class Inamic implements Serializable {
     }
 
     /**
-     * Returnează debuff-urile active.
+     * Returnează debuff-urile active (simplified - doar nume și durată).
      */
     public Map<String, Integer> getDebuffuriActive() {
         Map<String, Integer> activeDebuffs = new HashMap<>();
@@ -337,6 +425,41 @@ public class Inamic implements Serializable {
             }
         }
         return activeDebuffs;
+    }
+
+    /**
+     * Returnează debuff-urile active complete (cu toate detaliile pentru tooltip-uri).
+     */
+    public Map<String, DebuffStack> getDebuffStacksActive() {
+        Map<String, DebuffStack> activeDebuffs = new HashMap<>();
+        for (Map.Entry<String, DebuffStack> entry : debuffuriActive.entrySet()) {
+            if (entry.getValue().isActive()) {
+                activeDebuffs.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return activeDebuffs;
+    }
+
+    /**
+     * Returnează durata unui debuff specific.
+     */
+    public int getDebuffDuration(String debuffName) {
+        DebuffStack debuff = debuffuriActive.get(debuffName);
+        return (debuff != null && debuff.isActive()) ? debuff.getDurata() : 0;
+    }
+
+    /**
+     * Returnează damage-ul per turn al unui debuff specific.
+     */
+    public int getDebuffDamage(String debuffName) {
+        DebuffStack debuff = debuffuriActive.get(debuffName);
+        if (debuff != null && debuff.isActive()) {
+            Map<String, Double> effects = debuff.getAllEffects();
+            if (effects.containsKey("damage_per_turn")) {
+                return effects.get("damage_per_turn").intValue();
+            }
+        }
+        return 0;
     }
 
     /**
@@ -363,6 +486,9 @@ public class Inamic implements Serializable {
     public String getNume() { return nume; }
     public int getNivel() { return nivel; }
     public int getViata() { return viata; }
+    public void setViata(int viata) {
+        this.viata = Math.max(0, Math.min(viata, viataMaxima));
+    }
     public int getViataMaxima() { return viataMaxima; }
     public int getDefense() { return defense; }
 
@@ -403,10 +529,87 @@ public class Inamic implements Serializable {
     }
 
 
+    public void setDamage(int damage) {
+        this.damage = damage;
+    }
+
     public String getTipDamageRezistent() { return tipDamageRezistent; }
     public String getTipDamageVulnerabil() { return tipDamageVulnerabil; }
     public double getCritChance() { return critChance; }
     public List<String> getAbilitatiSpeciale() { return new ArrayList<>(abilitatiSpeciale); }
+
+    // 🆕 Elite tier and affix getters/setters
+    public EnemyTier getTier() { return tier; }
+    public void setTier(EnemyTier tier) { this.tier = tier; }
+
+    public com.rpg.model.enemies.EnemyArchetype getArchetype() { return archetype; }
+    public void setArchetype(com.rpg.model.enemies.EnemyArchetype archetype) { this.archetype = archetype; }
+
+    public List<EnemyAffix> getAffixes() { return new ArrayList<>(affixes); }
+    public void setAffixes(List<EnemyAffix> affixes) { this.affixes = new ArrayList<>(affixes); }
+    public void addAffix(EnemyAffix affix) { this.affixes.add(affix); }
+    public boolean hasAffix(EnemyAffix affix) { return this.affixes.contains(affix); }
+
+    // Affix state getters/setters
+    public boolean hasShield() { return hasShield; }
+    public void setHasShield(boolean hasShield) { this.hasShield = hasShield; }
+    public int getShieldHealth() { return shieldHealth; }
+    public void setShieldHealth(int shieldHealth) { this.shieldHealth = shieldHealth; }
+    public boolean hasTeleported() { return hasTeleported; }
+    public void setHasTeleported(boolean hasTeleported) { this.hasTeleported = hasTeleported; }
+    public boolean hasSummonedMinion() { return hasSummonedMinion; }
+    public void setHasSummonedMinion(boolean hasSummonedMinion) { this.hasSummonedMinion = hasSummonedMinion; }
+
+    /**
+     * Returns formatted enemy name with tier icon and affixes.
+     */
+    public String getFormattedName() {
+        StringBuilder sb = new StringBuilder();
+
+        // Add tier icon if not normal
+        if (tier != EnemyTier.NORMAL) {
+            sb.append(tier.getIcon()).append(" ");
+        }
+
+        sb.append(nume);
+
+        // Add affix icons
+        if (!affixes.isEmpty()) {
+            sb.append(" ");
+            for (EnemyAffix affix : affixes) {
+                sb.append(affix.getIcon());
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Returns detailed tooltip with tier and affixes.
+     */
+    public String getTooltip() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(getFormattedName()).append("\n");
+        sb.append("Level ").append(nivel).append(" | ");
+        sb.append(tier.getFormattedName()).append("\n");
+        sb.append("HP: ").append(viata).append("/").append(viataMaxima).append("\n");
+
+        if (!affixes.isEmpty()) {
+            sb.append("\nAffixes:\n");
+            for (EnemyAffix affix : affixes) {
+                sb.append("  ").append(affix.getTooltip()).append("\n");
+            }
+        }
+
+        if (tipDamageRezistent != null) {
+            sb.append("Resistant: ").append(tipDamageRezistent).append("\n");
+        }
+        if (tipDamageVulnerabil != null) {
+            sb.append("Weak to: ").append(tipDamageVulnerabil).append("\n");
+        }
+
+        return sb.toString();
+    }
 
 
     @Override
@@ -487,6 +690,251 @@ public class Inamic implements Serializable {
     // FIX: Metodă nouă pentru Șaorma reward
     public int getShaormaReward() {
         return boss ? 1 : 0; // Doar boss-ii dau șaorme de revival
+    }
+
+    // ==================== ABILITY SYSTEM ====================
+
+    /**
+     * Gets the list of abilities this enemy has.
+     */
+    public List<com.rpg.model.enemies.EnemyAbility> getAbilities() {
+        return new ArrayList<>(abilities);
+    }
+
+    /**
+     * Sets the abilities for this enemy.
+     */
+    public void setAbilities(List<com.rpg.model.enemies.EnemyAbility> abilities) {
+        this.abilities = new ArrayList<>(abilities);
+        // Initialize cooldowns
+        for (com.rpg.model.enemies.EnemyAbility ability : abilities) {
+            abilityCooldowns.put(ability, 0);
+        }
+    }
+
+    /**
+     * Adds a single ability to this enemy.
+     */
+    public void addAbility(com.rpg.model.enemies.EnemyAbility ability) {
+        if (!abilities.contains(ability)) {
+            abilities.add(ability);
+            abilityCooldowns.put(ability, 0);
+        }
+    }
+
+    /**
+     * Checks if an ability is ready to use (cooldown expired and HP threshold met).
+     */
+    public boolean isAbilityReady(com.rpg.model.enemies.EnemyAbility ability) {
+        // Check cooldown
+        if (abilityCooldowns.getOrDefault(ability, 0) > 0) {
+            return false;
+        }
+
+        // Check HP threshold
+        double currentHpPercent = (double) viata / viataMaxima;
+        return ability.isUsableAtHP(currentHpPercent);
+    }
+
+    /**
+     * Marks an ability as used, putting it on cooldown.
+     */
+    public void useAbility(com.rpg.model.enemies.EnemyAbility ability) {
+        abilityCooldowns.put(ability, ability.getCooldown());
+    }
+
+    /**
+     * Updates all ability cooldowns at the start of turn.
+     */
+    public void updateAbilityCooldowns() {
+        for (com.rpg.model.enemies.EnemyAbility ability : abilityCooldowns.keySet()) {
+            int current = abilityCooldowns.get(ability);
+            if (current > 0) {
+                abilityCooldowns.put(ability, current - 1);
+            }
+        }
+    }
+
+    /**
+     * Gets a random usable ability, or null if none available.
+     */
+    public com.rpg.model.enemies.EnemyAbility chooseRandomAbility() {
+        List<com.rpg.model.enemies.EnemyAbility> usableAbilities = new ArrayList<>();
+
+        for (com.rpg.model.enemies.EnemyAbility ability : abilities) {
+            if (isAbilityReady(ability)) {
+                usableAbilities.add(ability);
+            }
+        }
+
+        if (usableAbilities.isEmpty()) {
+            return null;
+        }
+
+        java.util.Random random = new java.util.Random();
+        return usableAbilities.get(random.nextInt(usableAbilities.size()));
+    }
+
+    /**
+     * Gets cooldown remaining for an ability.
+     */
+    public int getAbilityCooldown(com.rpg.model.enemies.EnemyAbility ability) {
+        return abilityCooldowns.getOrDefault(ability, 0);
+    }
+
+    // ==================== ABILITY BUFF/DEBUFF MANAGEMENT ====================
+
+    /**
+     * Updates all ability-related buff/debuff timers at end of turn.
+     */
+    public void updateAbilityEffects() {
+        // Damage reduction (Shield Wall)
+        if (abilityDamageReductionTurns > 0) {
+            abilityDamageReductionTurns--;
+            if (abilityDamageReductionTurns == 0) {
+                abilityDamageReductionAmount = 0.0;
+            }
+        }
+
+        // Damage buff (Battle Cry, Enrage)
+        if (abilityDamageBuffTurns > 0) {
+            abilityDamageBuffTurns--;
+            if (abilityDamageBuffTurns == 0) {
+                abilityDamageBuffAmount = 0.0;
+            }
+        }
+
+        // Defense debuff (Desperate Gambit)
+        if (abilityDefenseDebuffTurns > 0) {
+            abilityDefenseDebuffTurns--;
+            if (abilityDefenseDebuffTurns == 0) {
+                abilityDefenseDebuffAmount = 0.0;
+            }
+        }
+
+        // Evasion (100% dodge)
+        if (abilityEvasionTurns > 0) {
+            abilityEvasionTurns--;
+            if (abilityEvasionTurns == 0) {
+                abilityEvasionActive = false;
+            }
+        }
+    }
+
+    /**
+     * Applies Shield Wall effect (damage reduction).
+     */
+    public void applyShieldWall(int turns, double reductionPercent) {
+        this.abilityDamageReductionTurns = turns;
+        this.abilityDamageReductionAmount = reductionPercent;
+    }
+
+    /**
+     * Applies damage buff (Battle Cry, Enrage).
+     */
+    public void applyDamageBuff(int turns, double buffPercent) {
+        this.abilityDamageBuffTurns = turns;
+        this.abilityDamageBuffAmount = buffPercent;
+    }
+
+    /**
+     * Applies defense debuff (Desperate Gambit).
+     */
+    public void applyDefenseDebuff(int turns, double debuffPercent) {
+        this.abilityDefenseDebuffTurns = turns;
+        this.abilityDefenseDebuffAmount = debuffPercent;
+    }
+
+    /**
+     * Activates evasion (100% dodge).
+     */
+    public void activateEvasion(int turns) {
+        this.abilityEvasionActive = true;
+        this.abilityEvasionTurns = turns;
+    }
+
+    /**
+     * Gets effective damage after ability buffs/debuffs.
+     */
+    public int getEffectiveDamage() {
+        double finalDamage = damage;
+
+        // Apply damage buff if active
+        if (abilityDamageBuffTurns > 0) {
+            finalDamage *= (1.0 + abilityDamageBuffAmount);
+        }
+
+        return (int) finalDamage;
+    }
+
+    /**
+     * Gets effective defense after ability buffs/debuffs.
+     */
+    public int getEffectiveDefense() {
+        double finalDefense = defense;
+
+        // Apply defense debuff if active
+        if (abilityDefenseDebuffTurns > 0) {
+            finalDefense *= (1.0 - abilityDefenseDebuffAmount);
+        }
+
+        return Math.max(0, (int) finalDefense);
+    }
+
+    /**
+     * Gets damage reduction from abilities (Shield Wall).
+     */
+    public double getAbilityDamageReduction() {
+        return abilityDamageReductionTurns > 0 ? abilityDamageReductionAmount : 0.0;
+    }
+
+    /**
+     * Gets remaining turns for damage buff.
+     */
+    public int getAbilityDamageBuffTurns() {
+        return abilityDamageBuffTurns;
+    }
+
+    /**
+     * Gets damage buff amount.
+     */
+    public double getAbilityDamageBuffAmount() {
+        return abilityDamageBuffAmount;
+    }
+
+    /**
+     * Checks if evasion is currently active.
+     */
+    public boolean hasAbilityEvasion() {
+        return abilityEvasionActive;
+    }
+
+    /**
+     * Gets a formatted status string showing active ability effects.
+     */
+    public String getAbilityEffectsStatus() {
+        StringBuilder sb = new StringBuilder();
+
+        if (abilityDamageReductionTurns > 0) {
+            sb.append(String.format("🛡️ Shield Wall: %.0f%% reduction (%d turns)\n",
+                    abilityDamageReductionAmount * 100, abilityDamageReductionTurns));
+        }
+
+        if (abilityDamageBuffTurns > 0) {
+            sb.append(String.format("⚔️ Damage Buff: +%.0f%% damage (%d turns)\n",
+                    abilityDamageBuffAmount * 100, abilityDamageBuffTurns));
+        }
+
+        if (abilityDefenseDebuffTurns > 0) {
+            sb.append(String.format("💔 Defense Debuff: -%.0f%% defense (%d turns)\n",
+                    abilityDefenseDebuffAmount * 100, abilityDefenseDebuffTurns));
+        }
+
+        if (abilityEvasionActive) {
+            sb.append(String.format("💨 Evasion: 100%% dodge (%d turns)\n", abilityEvasionTurns));
+        }
+
+        return sb.toString();
     }
 
 

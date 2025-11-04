@@ -20,6 +20,9 @@ public class BattleService {
     private int turnNumber = 0;
     private boolean turnExecuted = false;
 
+    // 🆕 Combo tracking - tracks the last ability used by the hero
+    private String lastAbilityUsed = null;
+
     // ⚙️ Configurări pentru battle log
     private static final int DELAY_SHORT = 800;   // 0.8s
     private static final int DELAY_MEDIUM = 1200; // 1.2s
@@ -519,69 +522,62 @@ public class BattleService {
         }
 
         System.out.println("\n✨ ABILITĂȚI DISPONIBILE:");
+        System.out.println("(Apasă numărul abilității pentru detalii)");
         System.out.println();
 
         for (int i = 0; i < abilitati.size(); i++) {
             Abilitate ab = abilitati.get(i);
 
-            // Linia 1: Nume și cost
+            // Linia 1: Nume și status
             System.out.printf("%d. %s", i + 1, ab.getNume());
+
+            if (ab.isUltimate()) {
+                System.out.print(" 🌟 ULTIMATE");
+            }
 
             if (!ab.poateFiFolosita()) {
                 System.out.printf(" ⏱️ (Cooldown: %d ture)", ab.getCooldownRamasa());
             }
             System.out.println();
 
-            // Linia 2: Detalii
-            System.out.printf("   💙 Cost: %d %s", ab.getCostMana(), erou.getTipResursa());
-
-            if (ab.getDamage() > 0) {
-                // Calculează damage-ul scalat cu stats
-                Map<String, Integer> statsMap = new HashMap<>();
-                statsMap.put("strength", erou.getStrengthTotal());
-                statsMap.put("dexterity", erou.getDexterityTotal());
-                statsMap.put("intelligence", erou.getIntelligenceTotal());
-
-                int scaledDamage = ab.calculeazaDamage(statsMap);
-                int baseDamage = ab.getDamage();
-
-                // Afișează ambele valori
-                System.out.printf(" | ⚔️ Damage: %d → %d", baseDamage, scaledDamage);
-            }
-
-            if (ab.getCooldown() > 0) {
-                System.out.printf(" | ⏱️ CD: %d", ab.getCooldown());
-            }
-            System.out.println();
-
-            // Linia 3: Buff info dacă există
-            if (ab.getBuffAplicat() != null) {
-                System.out.print("   ✨ BUFF: " + ab.getBuffAplicat());
-                System.out.printf(" (%d ture) - ", ab.getDurataBuff());
-
-                Map<String, Double> buffs = ab.getModificatoriBuff();
-                List<String> buffDetails = new ArrayList<>();
-
-                buffs.forEach((stat, bonus) -> {
-                    String increase = String.format("%.0f%%", (bonus - 1.0) * 100);
-                    buffDetails.add(stat + " +" + increase);
-                });
-
-                System.out.println(String.join(", ", buffDetails));
-            }
-
-            // Linia 4: Debuff info dacă există
-            if (ab.getDebuffAplicat() != null) {
-                System.out.printf("   💀 DEBUFF: %s (%d ture)\n",
-                        ab.getDebuffAplicat(), ab.getDurataDebuff());
-            }
+            // Linia 2: Short tooltip
+            System.out.print("   ");
+            System.out.println(com.rpg.utils.AbilityTooltipGenerator.generateShortTooltip(ab, erou));
 
             System.out.println(); // Linie goală între abilități
         }
 
         System.out.println((abilitati.size() + 1) + ". ❌ Anulează");
+        System.out.println((abilitati.size() + 2) + ". 📖 Vezi Detalii Abilitate");
 
-        int choice = Validator.readValidChoice(scanner, 1, abilitati.size() + 1);
+        int choice = Validator.readValidChoice(scanner, 1, abilitati.size() + 2);
+
+        // Check if user wants to see details
+        if (choice == abilitati.size() + 2) {
+            System.out.println("\n📖 DETALII ABILITĂȚI:");
+            System.out.println("Alege abilitatea pentru a vedea detalii complete:");
+
+            for (int i = 0; i < abilitati.size(); i++) {
+                System.out.printf("%d. %s\n", i + 1, abilitati.get(i).getNume());
+            }
+            System.out.println((abilitati.size() + 1) + ". ❌ Înapoi");
+
+            int detailChoice = Validator.readValidChoice(scanner, 1, abilitati.size() + 1);
+
+            if (detailChoice == abilitati.size() + 1) {
+                return false; // Go back
+            }
+
+            Abilitate selectedAbility = abilitati.get(detailChoice - 1);
+
+            // Show detailed tooltip
+            System.out.println("\n");
+            System.out.println(com.rpg.utils.AbilityTooltipGenerator.generateTooltip(selectedAbility, erou));
+            System.out.println("\nApasă ENTER pentru a continua...");
+            scanner.nextLine();
+
+            return false; // Go back to ability selection
+        }
 
         if (choice == abilitati.size() + 1) {
             return false;
@@ -601,48 +597,155 @@ public class BattleService {
             return false;
         }
 
-        // EXECUTĂ ABILITATEA
-        erou.consumaResursa(abilitate);
-        abilitate.aplicaCooldown();
-
-       // BattleOneLiners.displayAbilityOneLiner(erou, abilitate);
+        // 🆕 EXECUTĂ ABILITATEA CU TOATE MECANICILE NOI
 
         System.out.println("\n" + "═".repeat(50));
+
+        // 🆕 ULTIMATE INDICATOR
+        if (abilitate.isUltimate()) {
+            System.out.println("🌟⚡ ULTIMATE ABILITY ⚡🌟");
+        }
+
         System.out.println("✨ FOLOSIRE ABILITATE: " + abilitate.getNume());
         System.out.println("═".repeat(50));
 
-        pauseWithLoading("⚡ Concentrare energie magică", DELAY_MEDIUM);
-
-        // Hit check
-        double hitChance = erou.getHitChance() + abilitate.getHitChanceBonus();
-        if (inamic.esteInspectat()) {
-            hitChance += 15.0;
-        }
-
-        System.out.printf("\n🎯 Șansă lovire: %.1f%%\n", hitChance);
-        pauseWithLoading("🎲 Verificare hit", DELAY_MEDIUM);
-
-        if (RandomUtils.chancePercent(hitChance)) {
-            System.out.println("✅ ABILITATE REUȘITĂ!");
+        // 🆕 SELF-DAMAGE (Berserker abilities)
+        if (abilitate.getSelfDamage() > 0) {
+            erou.iaDamage(abilitate.getSelfDamage());
+            System.out.println("💔 " + erou.getNume() + " își sacrifică " + abilitate.getSelfDamage() + " HP pentru putere!");
             pause(DELAY_SHORT);
 
-            // Calculează damage
-            DamageBreakdown breakdown = calculateDetailedDamage(erou, inamic, true, abilitate);
-            breakdown.display(erou.getNume() + " [" + abilitate.getNume() + "]");
+            if (!erou.esteViu()) {
+                System.out.println("💀 " + erou.getNume() + " și-a sacrificat prea multă viață!");
+                return false;
+            }
+        }
 
-            pause(DELAY_MEDIUM);
+        erou.consumaResursa(abilitate);
+        abilitate.aplicaCooldown();
 
-            if (breakdown.isCrit) {
-                System.out.println("\n═══════════════════════════");
-                System.out.println("   💥 CRITICAL ABILITY! 💥  ");
-                System.out.println(" ═══════════════════════════");
+        // 🆕 HEALING (healAmount or healPercent)
+        if (abilitate.getHealAmount() > 0 || abilitate.getHealPercent() > 0) {
+            int healAmount = abilitate.getHealAmount();
+
+            // Percentage-based healing
+            if (abilitate.getHealPercent() > 0) {
+                healAmount += (int) (erou.getViataMaxima() * abilitate.getHealPercent());
             }
 
-            pauseWithLoading("⚡ Aplicare damage", DELAY_SHORT);
-            inamic.iaDamage(breakdown.finalDamage);
+            if (healAmount > 0) {
+                erou.vindeca(healAmount);
+                System.out.println("💚 " + erou.getNume() + " se vindecă cu " + healAmount + " HP!");
+                pause(DELAY_SHORT);
+            }
+        }
 
-            System.out.printf("\n💢 %s primește %d damage!\n",
-                    inamic.getNume(), breakdown.finalDamage);
+        // ✅ APPLY BUFF TO HERO IF ABILITY HAS BUFF
+        if (abilitate.getBuffAplicat() != null && !abilitate.getModificatoriBuff().isEmpty()) {
+            erou.aplicaBuff(abilitate.getBuffAplicat(), abilitate.getModificatoriBuff(), abilitate.getDurataBuff());
+            System.out.println("✨ Buff aplicat: " + abilitate.getBuffAplicat() + " pentru " + abilitate.getDurataBuff() + " ture!");
+            pause(DELAY_SHORT);
+        }
+
+        pauseWithLoading("⚡ Concentrare energie magică", DELAY_MEDIUM);
+
+        // Calculează damage
+        Map<String, Integer> statsMap = new HashMap<>();
+        statsMap.put("strength", erou.getStrengthTotal());
+        statsMap.put("dexterity", erou.getDexterityTotal());
+        statsMap.put("intelligence", erou.getIntelligenceTotal());
+
+        int abilityDamage = abilitate.calculeazaDamage(statsMap);
+
+        // 🆕 COMBO BONUS DAMAGE
+        boolean comboActivated = false;
+        if (abilitate.getComboRequirement() != null && !abilitate.getComboRequirement().isEmpty()) {
+            if (abilitate.getComboRequirement().equals(lastAbilityUsed)) {
+                comboActivated = true;
+                int bonusDamage = (int) (abilityDamage * abilitate.getComboBonusDamage());
+                abilityDamage += bonusDamage;
+                System.out.println("🔥 COMBO ACTIVATED! +" + bonusDamage + " bonus damage!");
+                pause(DELAY_SHORT);
+            } else {
+                System.out.println("⚠️ Combo failed! Need to use " + abilitate.getComboRequirement() + " first.");
+                pause(DELAY_SHORT);
+            }
+        }
+
+        // Track this ability for future combos
+        lastAbilityUsed = abilitate.getNume();
+
+        // Only deal damage if ability has damage (some abilities are pure buffs)
+        if (abilityDamage > 0) {
+            // 🆕 MULTI-HIT MECHANICS
+            int numberOfHits = Math.max(1, abilitate.getNumberOfHits());
+            int totalDamageDealt = 0;
+
+            if (numberOfHits > 1) {
+                System.out.println("⚔️ Multi-hit ability! Strikes " + numberOfHits + " times!");
+                pause(DELAY_SHORT);
+            }
+
+            for (int hit = 1; hit <= numberOfHits; hit++) {
+                if (!inamic.esteViu()) break;  // Stop if enemy dies mid-combo
+
+                if (numberOfHits > 1) {
+                    System.out.println("\n  ➤ Hit " + hit + "/" + numberOfHits + ":");
+                }
+
+                // Hit check
+                double hitChance = erou.getHitChance() + abilitate.getHitChanceBonus();
+                if (inamic.esteInspectat()) {
+                    hitChance += 15.0;
+                }
+
+                if (numberOfHits == 1) {
+                    System.out.printf("\n🎯 Șansă lovire: %.1f%%\n", hitChance);
+                    pauseWithLoading("🎲 Verificare hit", DELAY_MEDIUM);
+                }
+
+                if (RandomUtils.chancePercent(hitChance)) {
+                    System.out.println("    ✅ HIT!");
+                    pause(DELAY_SHORT);
+
+                    // Calculate damage for this hit
+                    int hitDamage = abilityDamage;
+
+                    // ✅ CRITICAL HIT CHECK (per hit)
+                    double critChance = erou.getCritChanceTotal();
+                    boolean isCrit = RandomUtils.chancePercent(critChance);
+
+                    if (isCrit) {
+                        hitDamage = (int) (hitDamage * erou.getCritMultiplierTotal());
+                        System.out.println("    ⚡ CRITICAL HIT!");
+                        pause(DELAY_SHORT);
+                    }
+
+                    int actualDamage = inamic.primesteDamage(hitDamage);
+                    totalDamageDealt += actualDamage;
+
+                    System.out.printf("    💥 %d damage!%s\n", actualDamage, (isCrit ? " (CRIT)" : ""));
+                    pause(DELAY_SHORT);
+
+                    // ✅ LIFESTEAL from run items + talent tree (per hit)
+                    double lifestealPercent = erou.getLifestealTotal();
+                    if (lifestealPercent > 0) {
+                        int healAmount = (int) (actualDamage * lifestealPercent);
+                        if (healAmount > 0) {
+                            erou.vindeca(healAmount);
+                            System.out.println("    🩸 Lifesteal: +" + healAmount + " HP!");
+                            pause(DELAY_SHORT);
+                        }
+                    }
+                } else {
+                    System.out.println("    ❌ Miss!");
+                }
+            }
+
+            if (numberOfHits > 1 && totalDamageDealt > 0) {
+                System.out.println("\n💥 Total damage: " + totalDamageDealt + "!");
+                pause(DELAY_MEDIUM);
+            }
 
             // Debuff/Buff effects
             if (abilitate.getDebuffAplicat() != null) {
@@ -654,8 +757,14 @@ public class BattleService {
             }
 
         } else {
-            System.out.println("❌ ABILITATE RATATĂ!");
-            System.out.println("💨 Energia magică se risipește...");
+            System.out.println("✅ Abilitate de buff/heal folosită cu succes!");
+        }
+
+        // 🆕 RESOURCE GENERATION (after successful use)
+        if (abilitate.getResourceGenerated() > 0) {
+            erou.regenResursa(abilitate.getResourceGenerated());
+            System.out.println("⚡ Generat " + abilitate.getResourceGenerated() + " " + erou.getTipResursa() + "!");
+            pause(DELAY_SHORT);
         }
 
         // Reduce cooldowns
@@ -1160,5 +1269,6 @@ public class BattleService {
         for (Abilitate abilitate : erou.getAbilitati()) {
             abilitate.setCooldownRamasa(0);
         }
+        lastAbilityUsed = null;  // 🆕 Reset combo tracking
     }
 }

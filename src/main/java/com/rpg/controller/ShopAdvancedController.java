@@ -58,7 +58,7 @@ public class ShopAdvancedController {
         root.setBottom(createFooter());
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        return new Scene(root, 1400, 900);
+        return new Scene(root, 1900, 1080);
     }
 
     private VBox createHeader() {

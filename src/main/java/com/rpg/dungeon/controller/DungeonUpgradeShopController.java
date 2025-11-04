@@ -38,7 +38,7 @@ public class DungeonUpgradeShopController {
         root.setCenter(createContent());
         root.setBottom(createFooter());
 
-        return new Scene(root, 1000, 700);
+        return new Scene(root, 1900, 1080);
     }
 
     private VBox createHeader() {

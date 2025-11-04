@@ -1,7 +1,10 @@
 package com.rpg.model.characters;
 
 import com.rpg.model.abilities.Abilitate;
+import com.rpg.model.abilities.AbilityLoadout;
+import com.rpg.model.abilities.ConfiguredAbility;
 import com.rpg.model.effects.BuffStack;
+import com.rpg.model.effects.DebuffStack;
 import com.rpg.model.items.BuffPotion;
 import com.rpg.model.items.EnchantScroll;
 import com.rpg.model.items.FlaskPiece;
@@ -84,8 +87,14 @@ public class Erou implements Serializable {
     private int healthPotions;
     private int manaPotions;
 
+    // 🆕 ABILITY LOADOUT SYSTEM - New customization system
+    private AbilityLoadout abilityLoadout;
+
     // Buff-uri active
     private final Map<String, BuffStack> buffuriActive;
+
+    // Debuff-uri active
+    private final Map<String, DebuffStack> debuffuriActive;
 
     // 🆕 RUN ITEM MODIFIERS (pentru dungeon roguelike)
     private transient double runItemDamageMultiplier = 1.0;
@@ -133,7 +142,8 @@ public class Erou implements Serializable {
         this.nume = nume;
         this.nivel = 1;
         this.xp = 0;
-        this.xpNecesarPentruUrmatoarelNivel = GameConstants.BASE_XP_REQUIRED;
+        // Hybrid XP formula for level 1→2: 100 + (1 * 20) = 120
+        this.xpNecesarPentruUrmatoarelNivel = GameConstants.BASE_XP_REQUIRED + GameConstants.XP_FLAT_BONUS_PER_LEVEL;
         this.strength = strength;
         this.dexterity = dexterity;
         this.intelligence = intelligence;
@@ -152,7 +162,11 @@ public class Erou implements Serializable {
         this.itemPockets = new ArrayList<>();  // Initialize item pockets
         this.abilitati = new ArrayList<>();
         this.buffuriActive = new HashMap<>();
+        this.debuffuriActive = new HashMap<>();
         this.echipat = new HashMap<>();
+
+        // Initialize ability loadout system
+        this.abilityLoadout = new AbilityLoadout();
 
         // Inițializează resursa curentă cu maxima
         this.resursaCurenta = this.resursaMaxima;
@@ -182,8 +196,8 @@ public class Erou implements Serializable {
                 (intelligence * GameConstants.MANA_PER_INTELLIGENCE) +
                 (nivel * GameConstants.MANA_PER_LEVEL);
 
-        // Base defense
-        int baseDefense = GameConstants.BASE_DEFENSE + (strength / 3) + (dexterity / 4);
+        // Base defense - 🔧 IMPROVED: Better scaling, includes level
+        int baseDefense = 8 + (strength / 2) + (dexterity / 3) + (nivel / 2);
 
         // Apply talent tree flat defense bonus
         baseDefense += talentFlatDefense;
@@ -713,6 +727,113 @@ public class Erou implements Serializable {
         }
     }
 
+    // ================== NEW ABILITY LOADOUT SYSTEM ==================
+
+    /**
+     * Gets the hero's ability loadout manager.
+     */
+    public AbilityLoadout getAbilityLoadout() {
+        // Lazy initialization for backward compatibility with old saves
+        if (abilityLoadout == null) {
+            abilityLoadout = new AbilityLoadout();
+        }
+        return abilityLoadout;
+    }
+
+    /**
+     * Unlocks a new configured ability (adds it to available pool).
+     * This is called when discovering abilities through quests, level-ups, etc.
+     */
+    public void unlockConfiguredAbility(ConfiguredAbility ability) {
+        getAbilityLoadout().unlockAbility(ability);
+    }
+
+    /**
+     * Checks if the hero has unlocked a specific ability.
+     */
+    public boolean hasUnlockedAbility(String abilityId) {
+        return getAbilityLoadout().hasAbility(abilityId);
+    }
+
+    /**
+     * Gets all abilities currently in the active loadout (max 6).
+     * These are the abilities available in combat.
+     */
+    public List<ConfiguredAbility> getActiveLoadoutAbilities() {
+        return getAbilityLoadout().getActiveAbilities();
+    }
+
+    /**
+     * Gets a specific configured ability by ID.
+     */
+    public ConfiguredAbility getConfiguredAbility(String abilityId) {
+        return getAbilityLoadout().getAbility(abilityId);
+    }
+
+    /**
+     * Adds an ability to the active loadout.
+     * Returns false if loadout is full or ability not unlocked.
+     */
+    public boolean addAbilityToLoadout(String abilityId) {
+        return getAbilityLoadout().addToLoadout(abilityId);
+    }
+
+    /**
+     * Removes an ability from the active loadout.
+     */
+    public void removeAbilityFromLoadout(String abilityId) {
+        getAbilityLoadout().removeFromLoadout(abilityId);
+    }
+
+    /**
+     * Clears the entire loadout.
+     */
+    public void clearLoadout() {
+        getAbilityLoadout().clearLoadout();
+    }
+
+    /**
+     * Sets the entire loadout at once (for pre-dungeon selection).
+     */
+    public boolean setLoadout(List<String> abilityIds) {
+        return getAbilityLoadout().setLoadout(abilityIds);
+    }
+
+    /**
+     * Checks if the hero has a valid loadout (at least 1 ability).
+     */
+    public boolean hasValidLoadout() {
+        return getAbilityLoadout().isLoadoutValid();
+    }
+
+    /**
+     * Gets the number of abilities in the current loadout.
+     */
+    public int getLoadoutSize() {
+        return getAbilityLoadout().getLoadoutSize();
+    }
+
+    /**
+     * Gets the total number of unlocked abilities.
+     */
+    public int getUnlockedAbilityCount() {
+        return getAbilityLoadout().getUnlockedAbilityCount();
+    }
+
+    /**
+     * Saves the current loadout as a template.
+     */
+    public void saveLoadoutTemplate(String name) {
+        getAbilityLoadout().saveLoadoutTemplate(name);
+    }
+
+    /**
+     * Loads a saved loadout template.
+     */
+    public boolean loadLoadoutTemplate(String name) {
+        return getAbilityLoadout().loadLoadoutTemplate(name);
+    }
+
     // Metode de utilizare a potiunilor
 
    // metoda de folosire la health potion
@@ -816,7 +937,12 @@ public boolean useManaPotion() {
         double equipmentBonus = getEquipmentBonus("dodge_chance"); // ✅ ADAUGĂ echipament
         double runItemBonus = runItemDodgeBonus * 100; // Convert 0.15 -> 15%
         double talentBonus = talentDodge; // 🌳 Talent tree bonus
-        return Math.min(75.0, baseDodgeChance + dexBonus + equipmentBonus + runItemBonus + talentBonus);
+
+        // Apply debuff reductions
+        double debuffReduction = getDebuffDodgeReduction() * 100; // Convert -0.50 -> -50%
+
+        double totalDodge = baseDodgeChance + dexBonus + equipmentBonus + runItemBonus + talentBonus + debuffReduction;
+        return Math.max(0.0, Math.min(75.0, totalDodge)); // Ensure it's between 0 and 75
     }
 
     public double getCritMultiplierTotal() {
@@ -832,7 +958,13 @@ public boolean useManaPotion() {
     }
 
     public int getDefenseTotal() {
-        return defense + getEquipmentBonus("defense");
+        int baseDefense = defense + getEquipmentBonus("defense");
+
+        // Apply debuff reductions
+        double debuffReduction = getDebuffDefenseReduction(); // e.g., -0.20 = -20%
+        int defenseAfterDebuff = (int) (baseDefense * (1.0 + debuffReduction));
+
+        return Math.max(0, defenseAfterDebuff); // Ensure defense doesn't go negative
     }
 
     // ================== METODE DE ACTUALIZARE STĂRI ==================
@@ -898,6 +1030,176 @@ public boolean useManaPotion() {
         });
     }
 
+    // metoda de aplicare debuffuri
+    public void aplicaDebuff(String nume, int durata, int damagePerTurn) {
+        Map<String, Double> effects = new HashMap<>();
+
+        switch (nume.toLowerCase()) {
+            case "stun" -> {
+                effects.put("stunned", 1.0); // 1.0 = true (stunned)
+            }
+            case "weaken" -> {
+                effects.put("damage_reduction", -0.30); // -30% damage dealt
+                effects.put("defense_reduction", -0.20); // -20% defense
+            }
+            case "cripple" -> {
+                effects.put("dodge_reduction", -0.50); // -50% dodge chance
+                effects.put("defense_reduction", -0.15); // -15% defense
+            }
+            case "poison" -> {
+                effects.put("damage_per_turn", (double) damagePerTurn);
+            }
+            case "burn" -> {
+                effects.put("damage_per_turn", (double) damagePerTurn);
+            }
+            case "freeze" -> {
+                effects.put("stunned", 1.0);
+                effects.put("damage_per_turn", (double) (damagePerTurn / 2)); // Less damage than burn
+            }
+            default -> {
+                effects.put("damage_per_turn", (double) damagePerTurn);
+            }
+        }
+
+        if (debuffuriActive.containsKey(nume)) {
+            debuffuriActive.get(nume).addStack(durata); // Only refresh duration
+        } else {
+            debuffuriActive.put(nume, new DebuffStack(effects, durata, 3)); // max 3 stacks
+        }
+
+        System.out.printf("💀 Debuff %s aplicat pe %s pentru %d ture!%n", nume, this.nume, durata);
+    }
+
+    // proceseaza si expira debuffurile active
+    public void aplicaEfecteleDebuffurilor() {
+        debuffuriActive.entrySet().removeIf(entry -> {
+            DebuffStack debuff = entry.getValue();
+
+            // Apply damage per turn if present
+            Map<String, Double> effects = debuff.getEffects();
+            if (effects.containsKey("damage_per_turn")) {
+                int damage = effects.get("damage_per_turn").intValue();
+                primesteDamage(damage);
+                System.out.printf("💀 %s suferă %d damage de la %s%n", this.nume, damage, entry.getKey());
+            }
+
+            debuff.decreaseDuration();
+            if (!debuff.isActive()) {
+                System.out.println("⏰ Debuff " + entry.getKey() + " a expirat pentru " + nume);
+                return true;
+            }
+            return false;
+        });
+    }
+
+    /**
+     * Process debuffs and return logs for UI display (similar to enemy debuff processing).
+     */
+    public java.util.List<String> processDebuffsWithLogs() {
+        java.util.List<String> logs = new java.util.ArrayList<>();
+
+        debuffuriActive.entrySet().removeIf(entry -> {
+            String debuffName = entry.getKey();
+            DebuffStack debuff = entry.getValue();
+
+            // Apply damage per turn if present
+            Map<String, Double> effects = debuff.getEffects();
+            if (effects.containsKey("damage_per_turn")) {
+                int dotDamage = effects.get("damage_per_turn").intValue();
+                if (dotDamage > 0) {
+                    viata = Math.max(0, viata - dotDamage);
+
+                    String icon = getDebuffIcon(debuffName);
+                    logs.add(icon + " " + nume + " takes " + dotDamage + " damage from " + debuffName + "!");
+
+                    if (viata <= 0) {
+                        logs.add("💀 " + nume + " died from " + debuffName + "!");
+                    }
+                }
+            }
+
+            debuff.decreaseDuration();
+
+            if (!debuff.isActive()) {
+                logs.add("⏰ " + debuffName + " expired on " + nume);
+                return true;
+            }
+
+            return false;
+        });
+
+        return logs;
+    }
+
+    /**
+     * Helper method to get icon for debuff type.
+     */
+    private String getDebuffIcon(String debuffName) {
+        String lower = debuffName.toLowerCase();
+        if (lower.contains("burn")) return "🔥";
+        if (lower.contains("poison")) return "☠️";
+        if (lower.contains("bleed")) return "🩸";
+        if (lower.contains("freeze") || lower.contains("ice")) return "❄️";
+        if (lower.contains("shock")) return "⚡";
+        return "💀";
+    }
+
+    // verifică dacă eroul este stunned
+    public boolean esteStunned() {
+        for (Map.Entry<String, DebuffStack> entry : debuffuriActive.entrySet()) {
+            DebuffStack debuff = entry.getValue();
+            if (debuff.isActive()) {
+                Map<String, Double> effects = debuff.getEffects();
+                if (effects.containsKey("stunned") && effects.get("stunned") > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // returnează reducerea de damage datorită debuffurilor
+    public double getDebuffDamageReduction() {
+        double reduction = 0.0;
+        for (DebuffStack debuff : debuffuriActive.values()) {
+            if (debuff.isActive()) {
+                Map<String, Double> effects = debuff.getEffects();
+                if (effects.containsKey("damage_reduction")) {
+                    reduction += effects.get("damage_reduction");
+                }
+            }
+        }
+        return reduction;
+    }
+
+    // returnează reducerea de defense datorită debuffurilor
+    public double getDebuffDefenseReduction() {
+        double reduction = 0.0;
+        for (DebuffStack debuff : debuffuriActive.values()) {
+            if (debuff.isActive()) {
+                Map<String, Double> effects = debuff.getEffects();
+                if (effects.containsKey("defense_reduction")) {
+                    reduction += effects.get("defense_reduction");
+                }
+            }
+        }
+        return reduction;
+    }
+
+    // returnează reducerea de dodge datorită debuffurilor
+    public double getDebuffDodgeReduction() {
+        double reduction = 0.0;
+        for (DebuffStack debuff : debuffuriActive.values()) {
+            if (debuff.isActive()) {
+                Map<String, Double> effects = debuff.getEffects();
+                if (effects.containsKey("dodge_reduction")) {
+                    reduction += effects.get("dodge_reduction");
+                }
+            }
+        }
+        return reduction;
+    }
+
     //self explenatory se adauga xp, apelata dupa procesarea luptei
     public void adaugaXp(int xp) {
         this.xp += xp;
@@ -938,8 +1240,11 @@ public boolean useManaPotion() {
             nivel++;
             levelsGained++;
 
-            xpNecesarPentruUrmatoarelNivel = (int)(GameConstants.BASE_XP_REQUIRED *
+            // Hybrid XP formula: exponential + linear for smoother curve
+            int exponentialPart = (int)(GameConstants.BASE_XP_REQUIRED *
                     Math.pow(GameConstants.XP_MULTIPLIER, nivel - 1));
+            int linearPart = nivel * GameConstants.XP_FLAT_BONUS_PER_LEVEL;
+            xpNecesarPentruUrmatoarelNivel = exponentialPart + linearPart;
 
             // Passive points for talent tree (replaces old stat point system)
             int passivePointsEarned = 3; // Base passive points (was STAT_POINTS_PER_LEVEL)
@@ -1550,6 +1855,7 @@ public boolean useManaPotion() {
    // public List<ObiectEchipament> getInventar() { return new ArrayList<>(inventar); }
     public List<Abilitate> getAbilitati() { return new ArrayList<>(abilitati); }
     public Map<String, BuffStack> getBuffuriActive() { return new HashMap<>(buffuriActive); }
+    public Map<String, DebuffStack> getDebuffuriActive() { return new HashMap<>(debuffuriActive); }
 
     public int getShaormaRevival() {
         return shaormaRevival;
@@ -2180,7 +2486,11 @@ public boolean useManaPotion() {
             }
         }
 
-        return baseDamage;
+        // Apply debuff damage reduction (e.g., -30% from Weakening Curse)
+        double damageReduction = getDebuffDamageReduction(); // e.g., -0.30 = -30%
+        baseDamage = (int) (baseDamage * (1.0 + damageReduction));
+
+        return Math.max(1, baseDamage); // Ensure at least 1 damage
     }
 
     public int primesteDamage(int damage) {
@@ -2194,7 +2504,11 @@ public boolean useManaPotion() {
             effectiveDefense = (int)(effectiveDefense * (1.0 + conditionalDefenseBonus / 100.0));
         }
 
-        int finalDamage = Math.max(1, damage - effectiveDefense);
+        // 🔧 DIMINISHING RETURNS: defense / (defense + 100)
+        // This prevents becoming invincible at high defense
+        // Examples: 0 def = 0%, 50 def = 33%, 100 def = 50%, 200 def = 67%, 500 def = 83%
+        double damageReduction = effectiveDefense / (double)(effectiveDefense + 100);
+        int finalDamage = Math.max(1, (int)(damage * (1.0 - damageReduction)));
         viata = Math.max(0, viata - finalDamage);
 
         // Track that hero was hit (for conditional bonuses)

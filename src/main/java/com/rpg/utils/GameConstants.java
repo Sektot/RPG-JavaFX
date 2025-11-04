@@ -70,8 +70,10 @@ public class GameConstants {
 
 
     // ==================== PROGRESSION ====================
+    // XP Curve: Hybrid formula for smoother progression
     public static final int BASE_XP_REQUIRED = 100;
-    public static final double XP_MULTIPLIER = 1.5;
+    public static final double XP_MULTIPLIER = 1.2;  // Reduced from 1.5 (much gentler curve)
+    public static final int XP_FLAT_BONUS_PER_LEVEL = 20;  // Linear component
     public static final int STAT_POINTS_PER_LEVEL = 3;
     public static final int MAX_LEVEL = 100;
     // ==================== RESOURCES ====================
@@ -111,12 +113,14 @@ public class GameConstants {
 
     /**
      * Calculează damage-ul unui inamic bazat pe nivel
+     * NEW FORMULA: 15 + (level * 4) + (level / 5) with ±15% variation
      */
     public static int calculateEnemyDamage(int nivel) {
-        int baseDamage = ENEMY_BASE_DAMAGE + (ENEMY_DAMAGE_PER_LEVEL * 2);
+        // 🔧 FIXED: Now uses level parameter! (was broken - constant 30 damage)
+        int baseDamage = 15 + (nivel * 4) + (nivel / 5);
 
-        // Adaugă variație ±20% (poți schimba procentul)
-        int variation = (int)(baseDamage * 0.2); // 20% variație
+        // Adaugă variație ±15% (reduced from 20% for more consistency)
+        int variation = (int)(baseDamage * 0.15);
         java.util.Random random = new java.util.Random();
         int minDamage = baseDamage - variation;
         int maxDamage = baseDamage + variation;
@@ -126,17 +130,21 @@ public class GameConstants {
 
     /**
      * Calculează health-ul maxim al unui inamic
+     * NEW FORMULA: 50 + (level * 20) + (level² * 0.5) - quadratic growth
      */
     public static int calculateEnemyHealth(int nivel, boolean isBoss) {
-        int baseHealth = 40 + (nivel * 10);
-        return isBoss ? (int)(baseHealth * 2.5) : baseHealth;
+        // Quadratic scaling: HP grows faster at higher levels
+        int baseHealth = 50 + (nivel * 20) + (int)(nivel * nivel * 0.5);
+        // Boss multiplier reduced from 2.5x to 2.0x (less HP sponge)
+        return isBoss ? (int)(baseHealth * 2.0) : baseHealth;
     }
 
     /**
      * Calculează defense-ul unui inamic
+     * NEW FORMULA: 2 + (level * 1.5) + (level / 10) - slightly faster growth
      */
     public static int calculateEnemyDefense(int nivel) {
-        return 2 + (nivel / 2);
+        return 2 + (int)(nivel * 1.5) + (nivel / 10);
     }
 
     /**

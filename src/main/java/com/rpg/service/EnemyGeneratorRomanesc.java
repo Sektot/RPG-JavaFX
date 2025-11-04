@@ -264,6 +264,9 @@ public class EnemyGeneratorRomanesc {
         inamic.setTipDamageRezistent(inamicData[3]);
         inamic.setCritChanceBonus(RandomUtils.randomInt(0, 5));
 
+        // 🆕 Enhance enemy with tier and affixes
+        EnemyAffixService.enhanceEnemy(inamic, nivel, false);
+
         return inamic;
     }
 
@@ -316,7 +319,9 @@ public class EnemyGeneratorRomanesc {
         boss.setTipDamageRezistent(getRezistentaBoss(nivel));
         boss.setCritChanceBonus(RandomUtils.randomInt(10, 20));
         boss.setRegenerareViata(Math.max(2, viataMaxima / 15));
-       // boss.setPoateAplicaDebuff(true);
+
+        // 🆕 Enhance boss with affixes (will be set to BOSS tier automatically)
+        EnemyAffixService.enhanceEnemy(boss, nivel, true);
 
         return boss;
     }

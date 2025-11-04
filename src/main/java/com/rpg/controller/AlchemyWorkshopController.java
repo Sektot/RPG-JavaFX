@@ -43,7 +43,7 @@ public class AlchemyWorkshopController {
         root.setCenter(createMainContent());
         root.setBottom(createFooter());
 
-        return new Scene(root, 1000, 700);
+        return new Scene(root, 1900, 1080);
     }
 
     private VBox createMainContent() {

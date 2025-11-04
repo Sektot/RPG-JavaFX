@@ -1,6 +1,7 @@
 module com.rpg {
     requires javafx.controls;
     requires javafx.fxml;
+    requires javafx.media;
     requires java.desktop;
 
     // Exportă package-urile principale

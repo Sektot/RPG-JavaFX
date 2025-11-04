@@ -1,6 +1,9 @@
 package com.rpg.model.characters.classes;
 
 import com.rpg.model.abilities.Abilitate;
+import com.rpg.model.abilities.AbilityDefinitions;
+import com.rpg.model.abilities.AbilityType;
+import com.rpg.model.abilities.ConfiguredAbility;
 import com.rpg.utils.GameConstants;
 
 import java.io.Serializable;
@@ -78,6 +81,21 @@ public class Oltean extends com.rpg.model.characters.Erou implements Serializabl
                         Map.of("dexterity", 1.8), "Bleed", 3, 6);
                 sang.setAbilityType(AbilityType.OFFENSIVE)
                         .setRequiredLevel(3);
+
+                // 🆕 NEW SYSTEM: Unlock Backstab at level 3
+                if (AbilityDefinitions.getVariantsForAbility("Backstab") != null) {
+                    ConfiguredAbility backstab = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createBackstabBase(),
+                            AbilityDefinitions.createBackstabVariants(),
+                            AbilityDefinitions.createBackstabTalents()
+                    );
+                    this.unlockConfiguredAbility(backstab);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Backstab");
+                    }
+                    System.out.println("🗡️ New Ability Unlocked: Backstab (customizable)");
+                }
+
                 yield sang;
             }
 
@@ -88,6 +106,21 @@ public class Oltean extends com.rpg.model.characters.Erou implements Serializabl
                 otrava.setAbilityType(AbilityType.OFFENSIVE)
                         .setRequiredLevel(5)
                         .setResourceGenerated(15);  // Generates 15 Energy
+
+                // 🆕 NEW SYSTEM: Unlock Poison Blade at level 5
+                if (AbilityDefinitions.getVariantsForAbility("Poison Blade") != null) {
+                    ConfiguredAbility poisonBlade = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createPoisonBladeBase(),
+                            AbilityDefinitions.createPoisonBladeVariants(),
+                            AbilityDefinitions.createPoisonBladeTalents()
+                    );
+                    this.unlockConfiguredAbility(poisonBlade);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Poison Blade");
+                    }
+                    System.out.println("☠️ New Ability Unlocked: Poison Blade (customizable)");
+                }
+
                 yield otrava;
             }
 
@@ -98,6 +131,21 @@ public class Oltean extends com.rpg.model.characters.Erou implements Serializabl
                 viteza.setAbilityType(AbilityType.BUFF)
                         .setRequiredLevel(8)
                         .setBuff("VitezaMortala", 3, Map.of("dexterity", 1.4, "attack_speed", 1.6, "crit_chance", 1.3));
+
+                // 🆕 NEW SYSTEM: Unlock Shadow Step at level 8
+                if (AbilityDefinitions.getVariantsForAbility("Shadow Step") != null) {
+                    ConfiguredAbility shadowStep = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createShadowStepBase(),
+                            AbilityDefinitions.createShadowStepVariants(),
+                            AbilityDefinitions.createShadowStepTalents()
+                    );
+                    this.unlockConfiguredAbility(shadowStep);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Shadow Step");
+                    }
+                    System.out.println("🌑 New Ability Unlocked: Shadow Step (customizable)");
+                }
+
                 yield viteza;
             }
 

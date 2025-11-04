@@ -41,7 +41,7 @@ public class SmithControllerFX {
 
         root.setStyle("-fx-background-color: #1a1a1a;");
 
-        return new Scene(root, 1000, 700);
+        return new Scene(root, 1900, 1080);
     }
 
     /**

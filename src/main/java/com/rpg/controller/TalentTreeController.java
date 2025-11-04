@@ -56,8 +56,8 @@ public class TalentTreeController {
     private static final double NODE_SMALL_RADIUS = 12;
     private static final double NODE_NOTABLE_RADIUS = 20;
     private static final double NODE_KEYSTONE_RADIUS = 30;
-    private static final double TREE_WIDTH = 2400;  // Increased from 1600
-    private static final double TREE_HEIGHT = 2400; // Increased from 1200
+    private static final double TREE_WIDTH = 3000;  // Increased for better spacing
+    private static final double TREE_HEIGHT = 3000; // Increased for better spacing
 
     // Colors
     private static final Color COLOR_STRENGTH = Color.rgb(255, 100, 100);
@@ -97,7 +97,7 @@ public class TalentTreeController {
         // Bottom - controls
         root.setBottom(createControls());
 
-        return new Scene(root, 1400, 900);
+        return new Scene(root, 1900, 1080);
     }
 
     private VBox createHeader() {
@@ -206,7 +206,7 @@ public class TalentTreeController {
 
         double centerX = TREE_WIDTH / 2;
         double centerY = TREE_HEIGHT / 2;
-        double spacing = 80; // Standard spacing for nodes
+        double spacing = 100; // Increased spacing to prevent overlapping
 
         // Starting node at center
         TalentNode startNode = new TalentNode(
@@ -234,63 +234,70 @@ public class TalentTreeController {
     private void addJewelSockets(double centerX, double centerY, double spacing) {
         int socketId = 1000; // Start jewel socket IDs at 1000
         Color socketColor = Color.rgb(200, 100, 255); // Purple for jewel sockets
+        double socketRadius = spacing * 6; // All sockets at same distance from center for symmetry
 
-        // Socket 1: Between STR and DEX paths (top-right area)
+        // Socket 1: Between STR and DEX (at 150° - perfect midpoint between 90° and 210°)
+        double socket1Angle = Math.toRadians(150);
         TalentNode socket1 = new TalentNode(
             socketId++, "💎 Jewel Socket", NodeType.JEWEL_SOCKET,
-            centerX + spacing * 2.5, centerY - spacing * 4.5,
+            centerX + Math.cos(socket1Angle) * socketRadius,
+            centerY + Math.sin(socket1Angle) * socketRadius,
             "Socket for jewels\n\nAllocate to unlock",
             socketColor, 0, 0, 0
         );
         socket1.addConnection(6); // Connect to STR path
-        socket1.addConnection(104); // Connect to DEX path
+        socket1.addConnection(106); // Connect to DEX path
         allNodes.add(socket1);
 
-        // Socket 2: Between DEX and INT paths (bottom-right area)
+        // Socket 2: Between DEX and INT (at 270° - perfect midpoint between 210° and 330°)
+        double socket2Angle = Math.toRadians(270);
         TalentNode socket2 = new TalentNode(
             socketId++, "💎 Jewel Socket", NodeType.JEWEL_SOCKET,
-            centerX + spacing * 2.5, centerY + spacing * 4.5,
+            centerX + Math.cos(socket2Angle) * socketRadius,
+            centerY + Math.sin(socket2Angle) * socketRadius,
             "Socket for jewels\n\nAllocate to unlock",
             socketColor, 0, 0, 0
         );
-        socket2.addConnection(109); // Connect to DEX path
-        socket2.addConnection(204); // Connect to INT path
+        socket2.addConnection(108); // Connect to DEX path
+        socket2.addConnection(206); // Connect to INT path
         allNodes.add(socket2);
 
-        // Socket 3: Between INT and STR paths (left area)
+        // Socket 3: Between INT and STR (at 30° - perfect midpoint between 330° and 90°)
+        double socket3Angle = Math.toRadians(30);
         TalentNode socket3 = new TalentNode(
             socketId++, "💎 Jewel Socket", NodeType.JEWEL_SOCKET,
-            centerX - spacing * 5.5, centerY - spacing * 0.5,
+            centerX + Math.cos(socket3Angle) * socketRadius,
+            centerY + Math.sin(socket3Angle) * socketRadius,
             "Socket for jewels\n\nAllocate to unlock",
             socketColor, 0, 0, 0
         );
-        socket3.addConnection(207); // Connect to INT path
+        socket3.addConnection(208); // Connect to INT path
         socket3.addConnection(8); // Connect to STR path
         allNodes.add(socket3);
     }
 
     private void generateStrengthPath(double centerX, double centerY) {
         int nodeId = 1;
-        double spacing = 80;
+        double spacing = 100; // Match the main spacing
 
-        // Main strength line going up-left
-        double angle = Math.toRadians(135); // 135 degrees = up-left
+        // Main strength line going STRAIGHT UP (90 degrees for perfect symmetry)
+        double angle = Math.toRadians(90); // 90 degrees = straight up
 
         for (int i = 1; i <= 15; i++) {
             double x = centerX + Math.cos(angle) * spacing * i;
             double y = centerY + Math.sin(angle) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+10 Strength";
-            String desc = "Increases Strength by 10";
-            int strBonus = 10;
+            String name = "+3 Strength";
+            String desc = "Increases Strength by 3";
+            int strBonus = 3;
 
             // Every 5th node is a notable
             if (i % 5 == 0) {
                 type = NodeType.NOTABLE;
                 name = "💪 Warrior's Might";
                 desc = "Powerful physique";
-                strBonus = 30;
+                strBonus = 10;
             }
 
             // Last node is a keystone
@@ -308,10 +315,10 @@ public class TalentTreeController {
 
             // Apply special effects
             if (i % 5 == 0 && i != 15) { // Notable nodes
-                node.withFlatHP(50).withFlatDefense(5); // +50 HP, +5 Defense
+                node.withFlatHP(30).withFlatDefense(3); // +30 HP, +3 Defense (reduced)
             }
             if (i == 15) { // Keystone
-                node.withDamage(50)      // +50% increased damage
+                node.withDamage(30)      // +30% increased damage (reduced from 50%)
                     .withHPPercent(-20); // -20% max HP (trade-off)
             }
 
@@ -331,24 +338,28 @@ public class TalentTreeController {
     }
 
     private void addStrengthBranches(double centerX, double centerY, int startId, double mainAngle, double spacing) {
-        // Branch 1: HP focused (connects at node 3)
-        double branchAngle1 = mainAngle + Math.toRadians(30);
+        // Branch 1: HP focused (connects at node 3) - Goes LEFT (perpendicular)
+        double branchAngle1 = mainAngle + Math.toRadians(90); // Perpendicular left (90° from main)
         int branchId = startId;
 
+        // Start from node 3's position
+        double node3X = centerX + Math.cos(mainAngle) * spacing * 3;
+        double node3Y = centerY + Math.sin(mainAngle) * spacing * 3;
+
         for (int i = 1; i <= 8; i++) {
-            double x = centerX + Math.cos(branchAngle1) * spacing * (3 + i);
-            double y = centerY + Math.sin(branchAngle1) * spacing * (3 + i);
+            double x = node3X + Math.cos(branchAngle1) * spacing * i;
+            double y = node3Y + Math.sin(branchAngle1) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+3% Max HP";
-            String desc = "Increases Maximum HP by 3%";
+            String name = "+2% Max HP";
+            String desc = "Increases Maximum HP by 2%";
             int bonus = 0;
 
             if (i == 4) {
                 type = NodeType.NOTABLE;
                 name = "🛡️ Iron Constitution";
-                desc = "+30 Strength\n+8% Max HP\n+5% Defense";
-                bonus = 30;
+                desc = "+10 Strength\n+5% Max HP\n+3% Defense";
+                bonus = 10;
             } else if (i == 8) {
                 type = NodeType.KEYSTONE;
                 name = "🏰 JUGGERNAUT";
@@ -362,16 +373,16 @@ public class TalentTreeController {
 
             // Apply notable effects
             if (i == 4) {
-                node.withHPPercent(8)           // +8% max HP
-                    .withDefensePercent(5);     // +5% defense
+                node.withHPPercent(5)           // +5% max HP (reduced from 8%)
+                    .withDefensePercent(3);     // +3% defense (reduced from 5%)
             }
             // Apply keystone effects with conditional bonus
             if (i == 8) {
-                node.withHPPercent(30)          // +30% max HP
-                    .withDefensePercent(20)     // +20% defense
-                    .withDamage(-15)            // -15% damage (defensive trade-off)
-                    .withConditional(BonusCondition.FULL_HP, "+40% Defense while at full HP")
-                    .withConditionalDefense(40); // Massive defense when healthy
+                node.withHPPercent(20)          // +20% max HP (reduced from 30%)
+                    .withDefensePercent(15)     // +15% defense (reduced from 20%)
+                    .withDamage(-10)            // -10% damage (defensive trade-off, reduced from -15%)
+                    .withConditional(BonusCondition.FULL_HP, "+25% Defense while at full HP")
+                    .withConditionalDefense(25); // Massive defense when healthy (reduced from 40%)
             }
 
             if (i == 1) {
@@ -384,22 +395,27 @@ public class TalentTreeController {
             branchId++;
         }
 
-        // Branch 2: Damage focused (connects at node 7)
-        double branchAngle2 = mainAngle - Math.toRadians(30);
+        // Branch 2: Damage focused (connects at node 7) - Goes RIGHT (perpendicular)
+        double branchAngle2 = mainAngle - Math.toRadians(90); // Perpendicular right (-90° from main)
+
+        // Start from node 7's position
+        double node7X = centerX + Math.cos(mainAngle) * spacing * 7;
+        double node7Y = centerY + Math.sin(mainAngle) * spacing * 7;
+
         for (int i = 1; i <= 8; i++) {
-            double x = centerX + Math.cos(branchAngle2) * spacing * (7 + i);
-            double y = centerY + Math.sin(branchAngle2) * spacing * (7 + i);
+            double x = node7X + Math.cos(branchAngle2) * spacing * i;
+            double y = node7Y + Math.sin(branchAngle2) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+5% Physical Damage";
-            String desc = "Increases physical damage by 5%";
+            String name = "+3% Damage";
+            String desc = "Increases physical damage by 3%";
             int bonus = 0;
 
             if (i == 4) {
                 type = NodeType.NOTABLE;
                 name = "⚔️ Weapon Master";
-                desc = "+30 Strength\n+10% Damage\n+5% Crit Chance";
-                bonus = 30;
+                desc = "+10 Strength\n+8% Damage\n+3% Crit Chance";
+                bonus = 10;
             } else if (i == 8) {
                 type = NodeType.KEYSTONE;
                 name = "💀 BLOOD RAGE";
@@ -413,16 +429,16 @@ public class TalentTreeController {
 
             // Apply notable effects
             if (i == 4) {
-                node.withDamage(10)             // +10% damage
-                    .withCritChance(5.0);       // +5% crit chance
+                node.withDamage(8)              // +8% damage (reduced from 10%)
+                    .withCritChance(3.0);       // +3% crit chance (reduced from 5%)
             }
             // Apply keystone effects with conditional bonus
             if (i == 8) {
-                node.withAttackSpeed(40)    // +40% attack speed
-                    .withDamage(30)         // +30% damage
-                    .withLifesteal(8.0)     // +8% lifesteal (to offset HP loss)
-                    .withConditional(BonusCondition.LOW_HP, "+60% Damage while below 35% HP")
-                    .withConditionalDamage(60); // Berserk rage when low HP
+                node.withAttackSpeed(25)    // +25% attack speed (reduced from 40%)
+                    .withDamage(20)         // +20% damage (reduced from 30%)
+                    .withLifesteal(5.0)     // +5% lifesteal (reduced from 8%)
+                    .withConditional(BonusCondition.LOW_HP, "+40% Damage while below 35% HP")
+                    .withConditionalDamage(40); // Berserk rage when low HP (reduced from 60%)
             }
 
             if (i == 1) {
@@ -438,25 +454,25 @@ public class TalentTreeController {
 
     private void generateDexterityPath(double centerX, double centerY) {
         int nodeId = 100;
-        double spacing = 80;
+        double spacing = 100; // Match the main spacing
 
-        // Main dexterity line going up-right
-        double angle = Math.toRadians(45); // 45 degrees = up-right
+        // Main dexterity line going BOTTOM-LEFT (210 degrees for perfect 120° symmetry)
+        double angle = Math.toRadians(210); // 210 degrees = bottom-left
 
         for (int i = 1; i <= 15; i++) {
             double x = centerX + Math.cos(angle) * spacing * i;
             double y = centerY + Math.sin(angle) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+10 Dexterity";
-            String desc = "Increases Dexterity by 10";
-            int dexBonus = 10;
+            String name = "+3 Dexterity";
+            String desc = "Increases Dexterity by 3";
+            int dexBonus = 3;
 
             if (i % 5 == 0) {
                 type = NodeType.NOTABLE;
                 name = "🎯 Assassin's Precision";
                 desc = "Deadly accuracy";
-                dexBonus = 30;
+                dexBonus = 10;
             }
 
             if (i == 15) {
@@ -473,11 +489,11 @@ public class TalentTreeController {
 
             // Apply special effects
             if (i % 5 == 0 && i != 15) { // Notable nodes
-                node.withCritChance(5.0).withAttackSpeed(10); // +5% crit, +10% attack speed
+                node.withCritChance(3.0).withAttackSpeed(8); // +3% crit, +8% attack speed (reduced)
             }
             if (i == 15) { // Keystone
-                node.withDodge(30.0)            // +30% dodge chance
-                    .withCritMultiplier(50);    // +50% crit multiplier
+                node.withDodge(20.0)            // +20% dodge chance (reduced from 30%)
+                    .withCritMultiplier(30);    // +30% crit multiplier (reduced from 50%)
             }
 
             // Connect to previous node (first node connects to start node 0)
@@ -496,24 +512,28 @@ public class TalentTreeController {
     }
 
     private void addDexterityBranches(double centerX, double centerY, int startId, double mainAngle, double spacing) {
-        // Branch 1: Crit focused (connects at node 103)
-        double branchAngle1 = mainAngle + Math.toRadians(30);
+        // Branch 1: Crit focused (connects at node 103) - Goes perpendicular
+        double branchAngle1 = mainAngle + Math.toRadians(90); // Perpendicular
         int branchId = startId;
 
+        // Start from node 103's position
+        double node103X = centerX + Math.cos(mainAngle) * spacing * 3;
+        double node103Y = centerY + Math.sin(mainAngle) * spacing * 3;
+
         for (int i = 1; i <= 8; i++) {
-            double x = centerX + Math.cos(branchAngle1) * spacing * (3 + i);
-            double y = centerY + Math.sin(branchAngle1) * spacing * (3 + i);
+            double x = node103X + Math.cos(branchAngle1) * spacing * i;
+            double y = node103Y + Math.sin(branchAngle1) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+8% Crit Chance";
-            String desc = "Increases critical strike chance by 8%";
+            String name = "+2% Crit Chance";
+            String desc = "Increases critical strike chance by 2%";
             int bonus = 0;
 
             if (i == 4) {
                 type = NodeType.NOTABLE;
                 name = "⚡ Deadly Precision";
-                desc = "+30 Dexterity\n+15% Crit Chance\n+20% Crit Damage";
-                bonus = 30;
+                desc = "+10 Dexterity\n+8% Crit Chance\n+12% Crit Damage";
+                bonus = 10;
             } else if (i == 8) {
                 type = NodeType.KEYSTONE;
                 name = "🎯 PERFECT AIM";
@@ -527,16 +547,16 @@ public class TalentTreeController {
 
             // Apply notable effects
             if (i == 4) {
-                node.withCritChance(15.0)       // +15% crit chance
-                    .withCritMultiplier(20);    // +20% crit damage
+                node.withCritChance(8.0)        // +8% crit chance (reduced from 15%)
+                    .withCritMultiplier(12);    // +12% crit damage (reduced from 20%)
             }
             // Apply keystone effects with conditional bonus
             if (i == 8) {
-                node.withCritChance(25.0)       // +25% crit chance
-                    .withCritMultiplier(100)    // +100% crit multiplier (2x → 3x)
+                node.withCritChance(15.0)       // +15% crit chance (reduced from 25%)
+                    .withCritMultiplier(60)     // +60% crit multiplier (reduced from 100%)
                     .withDodge(-100)            // Cannot dodge (trade-off)
-                    .withConditional(BonusCondition.NOT_HIT_RECENTLY, "+50% Crit Chance if not hit recently")
-                    .withConditionalCrit(50);   // Bonus precision when safely positioned
+                    .withConditional(BonusCondition.NOT_HIT_RECENTLY, "+30% Crit Chance if not hit recently")
+                    .withConditionalCrit(30);   // Bonus precision when safely positioned (reduced from 50%)
             }
 
             if (i == 1) {
@@ -549,22 +569,27 @@ public class TalentTreeController {
             branchId++;
         }
 
-        // Branch 2: Evasion focused (connects at node 107)
-        double branchAngle2 = mainAngle - Math.toRadians(30);
+        // Branch 2: Evasion focused (connects at node 107) - Goes perpendicular opposite direction
+        double branchAngle2 = mainAngle - Math.toRadians(90); // Perpendicular opposite
+
+        // Start from node 107's position
+        double node107X = centerX + Math.cos(mainAngle) * spacing * 7;
+        double node107Y = centerY + Math.sin(mainAngle) * spacing * 7;
+
         for (int i = 1; i <= 8; i++) {
-            double x = centerX + Math.cos(branchAngle2) * spacing * (7 + i);
-            double y = centerY + Math.sin(branchAngle2) * spacing * (7 + i);
+            double x = node107X + Math.cos(branchAngle2) * spacing * i;
+            double y = node107Y + Math.sin(branchAngle2) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+5% Dodge";
-            String desc = "Increases dodge chance by 5%";
+            String name = "+3% Dodge";
+            String desc = "Increases dodge chance by 3%";
             int bonus = 0;
 
             if (i == 4) {
                 type = NodeType.NOTABLE;
                 name = "💨 Acrobatics";
-                desc = "+30 Dexterity\n+15% Dodge\n+10% Movement Speed";
-                bonus = 30;
+                desc = "+10 Dexterity\n+8% Dodge\n+8% Attack Speed";
+                bonus = 10;
             } else if (i == 8) {
                 type = NodeType.KEYSTONE;
                 name = "👻 PHASE SHIFT";
@@ -578,14 +603,14 @@ public class TalentTreeController {
 
             // Apply notable effects (movement speed not implemented, use attack speed)
             if (i == 4) {
-                node.withDodge(15.0)            // +15% dodge
-                    .withAttackSpeed(10);       // +10% attack speed (represents movement)
+                node.withDodge(8.0)             // +8% dodge (reduced from 15%)
+                    .withAttackSpeed(8);        // +8% attack speed (reduced from 10%)
             }
             // Apply keystone effects
             if (i == 8) {
-                node.withDodge(40.0)            // +40% dodge
-                    .withAttackSpeed(25)        // +25% attack speed
-                    .withDefensePercent(-50);   // -50% defense (trade-off)
+                node.withDodge(25.0)            // +25% dodge (reduced from 40%)
+                    .withAttackSpeed(20)        // +20% attack speed (reduced from 25%)
+                    .withDefensePercent(-40);   // -40% defense (trade-off, reduced from -50%)
             }
 
             if (i == 1) {
@@ -601,26 +626,26 @@ public class TalentTreeController {
 
     private void generateIntelligencePath(double centerX, double centerY) {
         int nodeId = 200;
-        double spacing = 80;
+        double spacing = 100; // Match the main spacing
 
-        // Main intelligence line going down
-        double angle = Math.toRadians(270); // 270 degrees = down
+        // Main intelligence line going BOTTOM-RIGHT (330 degrees for perfect 120° symmetry)
+        double angle = Math.toRadians(330); // 330 degrees = bottom-right
 
         for (int i = 1; i <= 15; i++) {
             double x = centerX + Math.cos(angle) * spacing * i;
             double y = centerY + Math.sin(angle) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+10 Intelligence";
-            String desc = "Increases Intelligence by 10";
-            int intBonus = 10;
+            String name = "+3 Intelligence";
+            String desc = "Increases Intelligence by 3";
+            int intBonus = 3;
 
             // Notable nodes at positions 4, 8, and 12 (instead of 5, 10, 15)
             if (i == 4 || i == 8 || i == 12) {
                 type = NodeType.NOTABLE;
                 name = "🧠 Arcane Mastery";
                 desc = "Mystical power";
-                intBonus = 30;
+                intBonus = 10;
             }
 
             if (i == 15) {
@@ -637,12 +662,12 @@ public class TalentTreeController {
 
             // Apply special effects
             if ((i == 4 || i == 8 || i == 12) && i != 15) { // Notable nodes
-                node.withCritChance(3.0)        // +3% spell crit
-                    .withCritMultiplier(15);    // +15% crit damage
+                node.withCritChance(2.0)        // +2% spell crit (reduced from 3%)
+                    .withCritMultiplier(10);    // +10% crit damage (reduced from 15%)
             }
             if (i == 15) { // Keystone
-                node.withDamage(40)             // +40% increased damage
-                    .withCritMultiplier(80);    // +80% crit multiplier (powerful caster)
+                node.withDamage(25)             // +25% increased damage (reduced from 40%)
+                    .withCritMultiplier(50);    // +50% crit multiplier (reduced from 80%)
             }
 
             // Connect to previous node (first node connects to start node 0)
@@ -664,24 +689,28 @@ public class TalentTreeController {
     }
 
     private void addIntelligenceBranches(double centerX, double centerY, int startId, double mainAngle, double spacing) {
-        // Branch 1: Mana focused (connects at node 203)
-        double branchAngle1 = mainAngle + Math.toRadians(35);
+        // Branch 1: Mana/Resource focused (connects at node 203) - Goes perpendicular
+        double branchAngle1 = mainAngle + Math.toRadians(90); // Perpendicular
         int branchId = startId;
 
+        // Start from node 203's position
+        double node203X = centerX + Math.cos(mainAngle) * spacing * 3;
+        double node203Y = centerY + Math.sin(mainAngle) * spacing * 3;
+
         for (int i = 1; i <= 8; i++) {
-            double x = centerX + Math.cos(branchAngle1) * spacing * (3 + i);
-            double y = centerY + Math.sin(branchAngle1) * spacing * (3 + i);
+            double x = node203X + Math.cos(branchAngle1) * spacing * i;
+            double y = node203Y + Math.sin(branchAngle1) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+5% Mana";
-            String desc = "Increases maximum mana by 5%";
+            String name = "+3% Resource";
+            String desc = "Increases maximum resource by 3%";
             int bonus = 0;
 
             if (i == 4) {
                 type = NodeType.NOTABLE;
                 name = "💙 Mana Reservoir";
-                desc = "+30 Intelligence\n+15% Mana\n+10% Mana Regen";
-                bonus = 30;
+                desc = "+10 Intelligence\n+8% Resource\n+5% HP";
+                bonus = 10;
             } else if (i == 8) {
                 type = NodeType.KEYSTONE;
                 name = "🌊 ELDRITCH BATTERY";
@@ -695,14 +724,14 @@ public class TalentTreeController {
 
             // Apply notable effects (mana/regen not implemented, use HP/damage)
             if (i == 4) {
-                node.withHPPercent(15)          // +15% HP (represents mana pool)
-                    .withDamage(10);            // +10% damage (mana regen → more casting)
+                node.withHPPercent(8)           // +8% HP (reduced from 15%)
+                    .withDamage(5);             // +5% damage (reduced from 10%)
             }
             // Apply keystone effects (mana conversion is complex, give HP/defense instead)
             if (i == 8) {
-                node.withHPPercent(20)          // +20% max HP (represents mana shield)
-                    .withDefensePercent(15)     // +15% defense
-                    .withDamage(10);            // +10% damage
+                node.withHPPercent(15)          // +15% max HP (reduced from 20%)
+                    .withDefensePercent(10)     // +10% defense (reduced from 15%)
+                    .withDamage(8);             // +8% damage (reduced from 10%)
             }
 
             if (i == 1) {
@@ -715,22 +744,27 @@ public class TalentTreeController {
             branchId++;
         }
 
-        // Branch 2: Spell damage focused (connects at node 207)
-        double branchAngle2 = mainAngle - Math.toRadians(35);
+        // Branch 2: Spell damage focused (connects at node 207) - Goes perpendicular opposite
+        double branchAngle2 = mainAngle - Math.toRadians(90); // Perpendicular opposite
+
+        // Start from node 207's position
+        double node207X = centerX + Math.cos(mainAngle) * spacing * 7;
+        double node207Y = centerY + Math.sin(mainAngle) * spacing * 7;
+
         for (int i = 1; i <= 8; i++) {
-            double x = centerX + Math.cos(branchAngle2) * spacing * (7 + i);
-            double y = centerY + Math.sin(branchAngle2) * spacing * (7 + i);
+            double x = node207X + Math.cos(branchAngle2) * spacing * i;
+            double y = node207Y + Math.sin(branchAngle2) * spacing * i;
 
             NodeType type = NodeType.SMALL;
-            String name = "+6% Spell Damage";
-            String desc = "Increases spell damage by 6%";
+            String name = "+3% Damage";
+            String desc = "Increases spell damage by 3%";
             int bonus = 0;
 
             if (i == 4) {
                 type = NodeType.NOTABLE;
                 name = "⚡ Elemental Focus";
-                desc = "+30 Intelligence\n+15% Spell Damage\n+10% Cast Speed";
-                bonus = 30;
+                desc = "+10 Intelligence\n+8% Damage\n+8% Attack Speed";
+                bonus = 10;
             } else if (i == 8) {
                 type = NodeType.KEYSTONE;
                 name = "🔮 PAIN ATTUNEMENT";
@@ -744,14 +778,14 @@ public class TalentTreeController {
 
             // Apply notable effects (cast speed → attack speed)
             if (i == 4) {
-                node.withDamage(15)             // +15% spell damage
-                    .withAttackSpeed(10);       // +10% cast speed (as attack speed)
+                node.withDamage(8)              // +8% spell damage (reduced from 15%)
+                    .withAttackSpeed(8);        // +8% cast speed (reduced from 10%)
             }
             // Apply keystone effects
             if (i == 8) {
-                node.withDamage(50)             // +50% spell damage
-                    .withCritMultiplier(50)     // +50% crit multiplier
-                    .withHPPercent(-15);        // -15% max HP (sacrifice)
+                node.withDamage(30)             // +30% spell damage (reduced from 50%)
+                    .withCritMultiplier(30)     // +30% crit multiplier (reduced from 50%)
+                    .withHPPercent(-12);        // -12% max HP (sacrifice, reduced from -15%)
             }
 
             if (i == 1) {
@@ -766,30 +800,32 @@ public class TalentTreeController {
     }
 
     private void generateHybridPaths(double centerX, double centerY) {
-        // Hybrid path connecting STR and DEX (top of tree)
+        // Hybrid path connecting STR and DEX
         int hybridId = 500;
-        double spacing = 80;
+        double spacing = 100; // Match the main spacing
+        double arcRadius = spacing * 10; // Fixed radius for all hybrid paths
 
-        // STR-DEX connector (10-12 nodes in an arc)
+        // STR-DEX connector (clean arc from 90° to 210°)
+        // STR is at 90°, DEX is at 210°, so arc goes 90° -> 150° (midpoint) -> 210°
         for (int i = 0; i < 10; i++) {
             double progress = (double) i / 9;
-            double angle = Math.toRadians(135 - (progress * 90)); // Arc from STR to DEX
-            double distance = spacing * 10;
+            double angle = Math.toRadians(90 + (progress * 120)); // Arc from STR (90°) to DEX (210°)
+            double distance = arcRadius;
 
             double x = centerX + Math.cos(angle) * distance;
             double y = centerY + Math.sin(angle) * distance;
 
             NodeType type = NodeType.SMALL;
-            String name = "+5 STR, +5 DEX";
+            String name = "+2 STR, +2 DEX";
             String desc = "Balanced offensive stats";
-            int strBonus = 5, dexBonus = 5;
+            int strBonus = 2, dexBonus = 2;
 
             if (i == 5) {
                 type = NodeType.NOTABLE;
                 name = "⚔️🎯 Battle Reflexes";
                 desc = "Swift warrior";
-                strBonus = 15;
-                dexBonus = 15;
+                strBonus = 5;
+                dexBonus = 5;
             }
 
             TalentNode node = new TalentNode(
@@ -799,8 +835,8 @@ public class TalentTreeController {
 
             // Add notable effects
             if (i == 5) {
-                node.withAttackSpeed(15)    // +15% attack speed
-                    .withDamage(10);        // +10% damage
+                node.withAttackSpeed(10)    // +10% attack speed (reduced from 15%)
+                    .withDamage(8);         // +8% damage (reduced from 10%)
             }
 
             if (i == 0) {
@@ -817,26 +853,27 @@ public class TalentTreeController {
             hybridId++;
         }
 
-        // DEX-INT connector (right side)
+        // DEX-INT connector (clean arc from 210° to 330°)
+        // DEX is at 210°, INT is at 330°, so arc goes 210° -> 270° (midpoint) -> 330°
         for (int i = 0; i < 10; i++) {
             double progress = (double) i / 9;
-            double angle = Math.toRadians(45 - (progress * 135)); // Arc from DEX to INT
-            double distance = spacing * 10;
+            double angle = Math.toRadians(210 + (progress * 120)); // Arc from DEX (210°) to INT (330°)
+            double distance = arcRadius;
 
             double x = centerX + Math.cos(angle) * distance;
             double y = centerY + Math.sin(angle) * distance;
 
             NodeType type = NodeType.SMALL;
-            String name = "+5 DEX, +5 INT";
+            String name = "+2 DEX, +2 INT";
             String desc = "Balanced precision and magic";
-            int dexBonus = 5, intBonus = 5;
+            int dexBonus = 2, intBonus = 2;
 
             if (i == 5) {
                 type = NodeType.NOTABLE;
                 name = "🎯🧠 Spellblade";
                 desc = "Magical precision";
-                dexBonus = 15;
-                intBonus = 15;
+                dexBonus = 5;
+                intBonus = 5;
             }
 
             TalentNode node = new TalentNode(
@@ -846,8 +883,8 @@ public class TalentTreeController {
 
             // Add notable effects
             if (i == 5) {
-                node.withCritChance(8.0)        // +8% spell crit
-                    .withCritMultiplier(25);    // +25% crit multiplier
+                node.withCritChance(5.0)        // +5% spell crit (reduced from 8%)
+                    .withCritMultiplier(15);    // +15% crit multiplier (reduced from 25%)
             }
 
             if (i == 0) {
@@ -864,26 +901,27 @@ public class TalentTreeController {
             hybridId++;
         }
 
-        // INT-STR connector (left side)
+        // INT-STR connector (clean arc from 330° to 90° = 450°)
+        // INT is at 330°, STR is at 90° (or 450° to go the right direction), arc goes 330° -> 390° -> 450°
         for (int i = 0; i < 10; i++) {
             double progress = (double) i / 9;
-            double angle = Math.toRadians(270 - (progress * 135)); // Arc from INT to STR
-            double distance = spacing * 10;
+            double angle = Math.toRadians(330 + (progress * 120)); // Arc from INT (330°) to STR (450° = 90°)
+            double distance = arcRadius;
 
             double x = centerX + Math.cos(angle) * distance;
             double y = centerY + Math.sin(angle) * distance;
 
             NodeType type = NodeType.SMALL;
-            String name = "+5 INT, +5 STR";
+            String name = "+2 INT, +2 STR";
             String desc = "Balanced magic and might";
-            int intBonus = 5, strBonus = 5;
+            int intBonus = 2, strBonus = 2;
 
             if (i == 5) {
                 type = NodeType.NOTABLE;
                 name = "🧠💪 Battlemage";
                 desc = "Magical warrior";
-                intBonus = 15;
-                strBonus = 15;
+                intBonus = 5;
+                strBonus = 5;
             }
 
             TalentNode node = new TalentNode(
@@ -893,8 +931,8 @@ public class TalentTreeController {
 
             // Add notable effects
             if (i == 5) {
-                node.withDamage(15)         // +15% damage
-                    .withHPPercent(10);     // +10% max HP
+                node.withDamage(10)         // +10% damage (reduced from 15%)
+                    .withHPPercent(8);      // +8% max HP (reduced from 10%)
             }
 
             if (i == 0) {

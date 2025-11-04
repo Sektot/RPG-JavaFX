@@ -1,6 +1,9 @@
 package com.rpg.model.characters.classes;
 
 import com.rpg.model.abilities.Abilitate;
+import com.rpg.model.abilities.AbilityDefinitions;
+import com.rpg.model.abilities.AbilityType;
+import com.rpg.model.abilities.ConfiguredAbility;
 import com.rpg.model.characters.Erou;
 import com.rpg.utils.GameConstants;
 
@@ -69,6 +72,19 @@ public class Moldovean extends Erou implements Serializable {
                 .setRequiredLevel(1)
                 .setResourceGenerated(20);  // Generates 20 Rage
         abilitati.add(taietura);
+
+        // 🆕 NEW SYSTEM: Unlock starting configured ability (Cleave)
+        if (AbilityDefinitions.getVariantsForAbility("Cleave") != null &&
+            !AbilityDefinitions.getVariantsForAbility("Cleave").isEmpty()) {
+            ConfiguredAbility cleave = AbilityDefinitions.createDefaultConfiguredAbility(
+                    AbilityDefinitions.createCleaveBase(),
+                    AbilityDefinitions.createCleaveVariants(),
+                    AbilityDefinitions.createCleaveTalents()
+            );
+            this.unlockConfiguredAbility(cleave);
+            this.addAbilityToLoadout("Cleave");
+            System.out.println("✨ Starting Ability Unlocked: Cleave (customizable)");
+        }
     }
 
     @Override
@@ -83,6 +99,23 @@ public class Moldovean extends Erou implements Serializable {
                 yield lovit;
             }
 
+            case 4 -> {
+                // 🆕 NEW SYSTEM: Unlock Shield Bash at level 4
+                if (AbilityDefinitions.getVariantsForAbility("Shield Bash") != null) {
+                    ConfiguredAbility shieldBash = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createShieldBashBase(),
+                            AbilityDefinitions.createShieldBashVariants(),
+                            AbilityDefinitions.createShieldBashTalents()
+                    );
+                    this.unlockConfiguredAbility(shieldBash);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Shield Bash");
+                    }
+                    System.out.println("🛡️ New Ability Unlocked: Shield Bash (customizable)");
+                }
+                yield null;  // No old-system ability at level 4
+            }
+
             case 5 -> {
                 // 🩸 Furia Sângelui - Berserker mode (costs HP, massive damage boost)
                 Abilitate furie = new Abilitate("Furia Sângelui", 0, Arrays.asList("special"), 40, 5, 100,
@@ -94,6 +127,23 @@ public class Moldovean extends Erou implements Serializable {
                 yield furie;
             }
 
+            case 6 -> {
+                // 🆕 NEW SYSTEM: Unlock Whirlwind at level 6
+                if (AbilityDefinitions.getVariantsForAbility("Whirlwind") != null) {
+                    ConfiguredAbility whirlwind = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createWhirlwindBase(),
+                            AbilityDefinitions.createWhirlwindVariants(),
+                            AbilityDefinitions.createWhirlwindTalents()
+                    );
+                    this.unlockConfiguredAbility(whirlwind);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Whirlwind");
+                    }
+                    System.out.println("🌪️ New Ability Unlocked: Whirlwind (customizable)");
+                }
+                yield null;  // No old-system ability at level 6
+            }
+
             case 8 -> {
                 // ⚡ Șarjă Furioasă - Charge attack that generates Rage
                 Abilitate sarja = new Abilitate("Șarjă Furioasă", 35, Arrays.asList("physical"), 25, 3, 90,
@@ -102,6 +152,23 @@ public class Moldovean extends Erou implements Serializable {
                         .setRequiredLevel(8)
                         .setResourceGenerated(25);
                 yield sarja;
+            }
+
+            case 9 -> {
+                // 🆕 NEW SYSTEM: Unlock Execute at level 9
+                if (AbilityDefinitions.getVariantsForAbility("Execute") != null) {
+                    ConfiguredAbility execute = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createExecuteBase(),
+                            AbilityDefinitions.createExecuteVariants(),
+                            AbilityDefinitions.createExecuteTalents()
+                    );
+                    this.unlockConfiguredAbility(execute);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Execute");
+                    }
+                    System.out.println("💀 New Ability Unlocked: Execute (customizable)");
+                }
+                yield null;  // No old-system ability at level 9
             }
 
             case 10 -> {

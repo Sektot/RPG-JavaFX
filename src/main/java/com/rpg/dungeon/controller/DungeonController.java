@@ -161,7 +161,7 @@ public class DungeonController {
         // Update initial display
         updateDisplay();
 
-        return new Scene(root, 1200, 800);
+        return new Scene(root, 1900, 1080);
     }
 
     private VBox createHeader() {

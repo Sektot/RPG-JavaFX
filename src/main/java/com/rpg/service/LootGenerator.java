@@ -274,7 +274,7 @@ public class LootGenerator {
                 if (roll < 0.7) { // 70% Physical
                     OneHandedPhysicalWeapon weapon = RandomUtils.randomElement(OneHandedPhysicalWeapon.values());
                     itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
-                    bonuses = calculatePhysicalWeaponBonuses(raritate);
+                    bonuses = calculatePhysicalWeaponBonuses(raritate, level);
                     weaponClass = weapon.getWeaponClass();
 
                     // Daggers/knives pot fi off-hand compatible
@@ -285,7 +285,7 @@ public class LootGenerator {
                             .toArray(MagicalWeapon[]::new);
                     MagicalWeapon weapon = RandomUtils.randomElement(oneHandedMagic);
                     itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
-                    bonuses = calculateMagicalWeaponBonuses(raritate);
+                    bonuses = calculateMagicalWeaponBonuses(raritate, level);
                     weaponClass = weapon.getWeaponClass();
                     isOffHandCompatible = true; // Wands pot fi off-hand
                 }
@@ -297,7 +297,7 @@ public class LootGenerator {
                 if (roll < 0.6) { // 60% Physical two-handed
                     TwoHandedPhysicalWeapon weapon = RandomUtils.randomElement(TwoHandedPhysicalWeapon.values());
                     itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
-                    bonuses = calculatePhysicalWeaponBonuses(raritate);
+                    bonuses = calculatePhysicalWeaponBonuses(raritate, level);
                     weaponClass = weapon.getWeaponClass();
                 } else if (roll < 0.85) { // 25% Magical two-handed (staffs)
                     MagicalWeapon[] twoHandedMagic = java.util.Arrays.stream(MagicalWeapon.values())
@@ -305,12 +305,12 @@ public class LootGenerator {
                             .toArray(MagicalWeapon[]::new);
                     MagicalWeapon weapon = RandomUtils.randomElement(twoHandedMagic);
                     itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
-                    bonuses = calculateMagicalWeaponBonuses(raritate);
+                    bonuses = calculateMagicalWeaponBonuses(raritate, level);
                     weaponClass = weapon.getWeaponClass();
                 } else { // 15% Ranged two-handed
                     RangedWeapon weapon = RandomUtils.randomElement(RangedWeapon.values());
                     itemName = generateWeaponName(weapon.getBaseName(), weapon.getPrefixes(), raritate);
-                    bonuses = calculateRangedWeaponBonuses(raritate);
+                    bonuses = calculateRangedWeaponBonuses(raritate, level);
                     weaponClass = weapon.getWeaponClass();
                 }
                 handedness = ObiectEchipament.WeaponHandedness.TWO_HANDED;
@@ -349,25 +349,25 @@ public class LootGenerator {
             case ARMOR -> {
                 String[] armorData = RandomUtils.randomElement(ARMOR_TYPES);
                 itemName = generateArmorName(armorData, raritate);
-                bonuses = calculateDefensiveBonuses(raritate, 1.0);
+                bonuses = calculateDefensiveBonuses(raritate, level, 1.0);
                 weaponClass = "armor";
             }
             case HELMET -> {
                 String[] helmetData = RandomUtils.randomElement(HELMET_TYPES);
                 itemName = generateArmorName(helmetData, raritate);
-                bonuses = calculateDefensiveBonuses(raritate, 0.7);
+                bonuses = calculateDefensiveBonuses(raritate, level, 0.7);
                 weaponClass = "helmet";
             }
             case BOOTS -> {
                 String[] bootsData = RandomUtils.randomElement(BOOTS_TYPES);
                 itemName = generateArmorName(bootsData, raritate);
-                bonuses = calculateDefensiveBonuses(raritate, 0.6);
+                bonuses = calculateDefensiveBonuses(raritate, level, 0.6);
                 weaponClass = "boots";
             }
             case GLOVES -> {
                 String[] glovesData = RandomUtils.randomElement(GLOVES_TYPES);
                 itemName = generateArmorName(glovesData, raritate);
-                bonuses = calculateDefensiveBonuses(raritate, 0.6);
+                bonuses = calculateDefensiveBonuses(raritate, level, 0.6);
                 weaponClass = "gloves";
             }
             case RING -> {
@@ -412,17 +412,21 @@ public class LootGenerator {
 
 // ==================== BONUSURI NOI ====================
 
-    private static Map<String, Integer> calculateRangedWeaponBonuses(Raritate raritate) {
+    private static Map<String, Integer> calculateRangedWeaponBonuses(Raritate raritate, int itemLevel) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 2);
+        // 🔧 NEW FORMULA: Level + Rarity scaling
+        int levelBonus = (itemLevel / 2) + 1;
+        int rarityMultipliedBonus = (int)(levelBonus * raritate.getMultiplier());
+        int statBonus = Math.max(1, rarityMultipliedBonus / 2) + RandomUtils.randomInt(0, 2);
+        int weaponDamage = rarityMultipliedBonus + RandomUtils.randomInt(1, Math.max(2, itemLevel / 10 + 2));
 
-        bonuses.put("dexterity", baseBonus + RandomUtils.randomInt(2, 6));
-        bonuses.put("Damage", baseBonus + RandomUtils.randomInt(3, 7));
-        bonuses.put("hit_chance", baseBonus * 2); // Ranged = mai precis
-        bonuses.put("crit_chance", baseBonus + 3);
+        bonuses.put("dexterity", statBonus + RandomUtils.randomInt(2, 6));
+        bonuses.put("Damage", weaponDamage);
+        bonuses.put("hit_chance", Math.max(4, statBonus * 2)); // Ranged = mai precis
+        bonuses.put("crit_chance", Math.max(5, statBonus + 3));
 
         if (raritate.ordinal() >= 2) {
-            bonuses.put("damage_bonus", baseBonus);
+            bonuses.put("damage_bonus", Math.max(2, statBonus));
         }
 
         return bonuses;
@@ -430,15 +434,15 @@ public class LootGenerator {
 
     private static Map<String, Integer> calculateOffHandWeaponBonuses(Raritate raritate) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 1.5); // Slightly lower than main hand
+        int statBonus = (int)(raritate.getMultiplier() * 1.5); // Slightly lower than main hand
 
-        bonuses.put("dexterity", baseBonus + RandomUtils.randomInt(1, 3));
-        bonuses.put("Damage", baseBonus + RandomUtils.randomInt(1, 4));
-        bonuses.put("crit_chance", baseBonus * 2); // Off-hand = mai multe crit-uri
-        bonuses.put("hit_chance", baseBonus);
+        bonuses.put("dexterity", statBonus + RandomUtils.randomInt(1, 3));
+        bonuses.put("Damage", statBonus + RandomUtils.randomInt(1, 4));
+        bonuses.put("crit_chance", statBonus * 2); // Off-hand = mai multe crit-uri
+        bonuses.put("hit_chance", statBonus);
 
         if (raritate.ordinal() >= 2) {
-            bonuses.put("dodge_chance", baseBonus);
+            bonuses.put("dodge_chance", statBonus);
         }
 
         return bonuses;
@@ -446,18 +450,18 @@ public class LootGenerator {
 
     private static Map<String, Integer> calculateOffHandMagicBonuses(Raritate raritate) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 1.5);
+        int statBonus = (int)(raritate.getMultiplier() * 1.5);
 
-        bonuses.put("intelligence", baseBonus + RandomUtils.randomInt(1, 4));
-        bonuses.put("mana", baseBonus * 8);
-        bonuses.put("mana_steal", baseBonus);
+        bonuses.put("intelligence", statBonus + RandomUtils.randomInt(1, 4));
+        bonuses.put("mana", statBonus * 8);
+        bonuses.put("mana_steal", statBonus);
 
         if (raritate.ordinal() >= 1) {
-            bonuses.put("elemental_damage", baseBonus);
+            bonuses.put("elemental_damage", statBonus);
         }
 
         if (raritate.ordinal() >= 2) {
-            bonuses.put("crit_chance", baseBonus);
+            bonuses.put("crit_chance", statBonus);
         }
 
         return bonuses;
@@ -501,34 +505,39 @@ public class LootGenerator {
 
     // ==================== CALCUL BONUSURI ====================
 
-    private static Map<String, Integer> calculatePhysicalWeaponBonuses(Raritate raritate) {
+    private static Map<String, Integer> calculatePhysicalWeaponBonuses(Raritate raritate, int itemLevel) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 2);
-        int attackBonus = baseBonus + RandomUtils.randomInt(2, 5);
+        // 🔧 NEW FORMULA: Level + Rarity scaling
+        int levelBonus = (itemLevel / 2) + 1;
+        int rarityMultipliedBonus = (int)(levelBonus * raritate.getMultiplier());
+        int randomVariation = RandomUtils.randomInt(1, Math.max(2, itemLevel / 10 + 2));
 
-        bonuses.put("strength", baseBonus + RandomUtils.randomInt(1, 4));
-        bonuses.put("Damage", attackBonus);
+        int weaponDamage = rarityMultipliedBonus + randomVariation;
+        int statBonus = Math.max(1, rarityMultipliedBonus / 2) + RandomUtils.randomInt(0, 2);
 
-        // ✨ BONUSURI NOI
+        bonuses.put("strength", statBonus);
+        bonuses.put("Damage", weaponDamage);
+
+        // ✨ BONUSURI NOI (scale with level)
         if (raritate.ordinal() >= 1) { // UNCOMMON+
-            bonuses.put("hit_chance", baseBonus + 2);
+            bonuses.put("hit_chance", Math.max(2, statBonus + 2));
         }
 
         if (raritate.ordinal() >= 2) { // RARE+
-            bonuses.put("crit_chance", baseBonus);
-            bonuses.put("damage_bonus", baseBonus / 2);
+            bonuses.put("crit_chance", Math.max(3, statBonus));
+            bonuses.put("damage_bonus", Math.max(2, statBonus / 2));
         }
 
         if (raritate.ordinal() >= 3) { // EPIC+
-            bonuses.put("lifesteal", Math.max(1, baseBonus / 3));
+            bonuses.put("lifesteal", Math.max(1, statBonus / 3));
         }
 
         if (raritate == Raritate.LEGENDARY) {
-            bonuses.put("elemental_damage", baseBonus);
+            bonuses.put("elemental_damage", Math.max(5, statBonus));
             // Bonus aleator special
             String[] specialBonuses = {"gold_find", "fire_resistance"};
             String special = RandomUtils.randomElement(specialBonuses);
-            bonuses.put(special, baseBonus + 5);
+            bonuses.put(special, Math.max(7, statBonus + 5));
         }
 
         return bonuses;
@@ -536,94 +545,102 @@ public class LootGenerator {
 
     private static Map<String, Integer> calculateAgileWeaponBonuses(Raritate raritate) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 2);
-        int attackBonus = baseBonus + RandomUtils.randomInt(2, 5);
+        int statBonus = (int)(raritate.getMultiplier() * 2);
+        int attackBonus = statBonus + RandomUtils.randomInt(2, 5);
 
-        bonuses.put("dexterity", baseBonus + RandomUtils.randomInt(1, 4));
+        bonuses.put("dexterity", statBonus + RandomUtils.randomInt(1, 4));
         bonuses.put("Damage", attackBonus);
 
         // ✨ BONUSURI NOI
         if (raritate.ordinal() >= 1) { // UNCOMMON+
-            bonuses.put("crit_chance", baseBonus + 3);
+            bonuses.put("crit_chance", statBonus + 3);
         }
 
         if (raritate.ordinal() >= 2) { // RARE+
-            bonuses.put("hit_chance", baseBonus + 5);
-            bonuses.put("dodge_chance", baseBonus / 2);
+            bonuses.put("hit_chance", statBonus + 5);
+            bonuses.put("dodge_chance", statBonus / 2);
         }
 
         if (raritate.ordinal() >= 3) { // EPIC+
-            bonuses.put("damage_bonus", baseBonus);
+            bonuses.put("damage_bonus", statBonus);
         }
 
         if (raritate == Raritate.LEGENDARY) {
-            bonuses.put("elemental_damage", baseBonus);
-            bonuses.put("gold_find", baseBonus + 10);
+            bonuses.put("elemental_damage", statBonus);
+            bonuses.put("gold_find", statBonus + 10);
         }
 
         return bonuses;
     }
 
-    private static Map<String, Integer> calculateMagicalWeaponBonuses(Raritate raritate) {
+    private static Map<String, Integer> calculateMagicalWeaponBonuses(Raritate raritate, int itemLevel) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 2);
-        int attackBonus = baseBonus + RandomUtils.randomInt(2, 5);
+        // 🔧 NEW FORMULA: Level + Rarity scaling
+        int levelBonus = (itemLevel / 2) + 1;
+        int rarityMultipliedBonus = (int)(levelBonus * raritate.getMultiplier());
+        int randomVariation = RandomUtils.randomInt(1, Math.max(2, itemLevel / 10 + 2));
 
-        bonuses.put("intelligence", baseBonus + RandomUtils.randomInt(1, 4));
-        bonuses.put("Damage", attackBonus);
+        int weaponDamage = rarityMultipliedBonus + randomVariation;
+        int statBonus = Math.max(1, rarityMultipliedBonus / 2) + RandomUtils.randomInt(0, 2);
+
+        bonuses.put("intelligence", statBonus);
+        bonuses.put("Damage", weaponDamage);
 
         // ✨ BONUSURI NOI
         if (raritate.ordinal() >= 1) { // UNCOMMON+
-            bonuses.put("mana", baseBonus * 5);
-            bonuses.put("mana_steal", Math.max(1, baseBonus / 2));
+            bonuses.put("mana", statBonus * 5);
+            bonuses.put("mana_steal", Math.max(1, statBonus / 2));
         }
 
         if (raritate.ordinal() >= 2) { // RARE+
-            bonuses.put("elemental_damage", baseBonus);
+            bonuses.put("elemental_damage", statBonus);
         }
 
         if (raritate.ordinal() >= 3) { // EPIC+
-            bonuses.put("crit_chance", baseBonus);
+            bonuses.put("crit_chance", statBonus);
             // Rezistențe elementale
-            bonuses.put("fire_resistance", baseBonus);
-            bonuses.put("ice_resistance", baseBonus);
+            bonuses.put("fire_resistance", statBonus);
+            bonuses.put("ice_resistance", statBonus);
         }
 
         if (raritate == Raritate.LEGENDARY) {
-            bonuses.put("damage_bonus", baseBonus);
-            bonuses.put("gold_find", baseBonus + 15);
+            bonuses.put("damage_bonus", statBonus);
+            bonuses.put("gold_find", statBonus + 15);
         }
 
         return bonuses;
     }
 
-    private static Map<String, Integer> calculateDefensiveBonuses(Raritate raritate, double multiplier) {
+    private static Map<String, Integer> calculateDefensiveBonuses(Raritate raritate, int itemLevel, double multiplier) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 2 * multiplier);
+        // 🔧 NEW FORMULA: Level + Rarity scaling
+        int levelBonus = (itemLevel / 3) + 1;  // Armor scales slightly slower
+        int rarityMultipliedBonus = (int)(levelBonus * raritate.getMultiplier() * multiplier);
+        int defenseBonus = rarityMultipliedBonus + RandomUtils.randomInt(1, Math.max(2, itemLevel / 10 + 2));
 
-        bonuses.put("defense", baseBonus + RandomUtils.randomInt(2, 5));
-        bonuses.put("health", (int)(baseBonus * 8));
+        bonuses.put("defense", defenseBonus);
+        bonuses.put("health", Math.max(15, (int)(rarityMultipliedBonus * 8)));
 
         // ✨ BONUSURI NOI
         if (raritate.ordinal() >= 1) { // UNCOMMON+
-            bonuses.put("dodge_chance", Math.max(1, baseBonus / 2));
+            bonuses.put("dodge_chance", Math.max(1, defenseBonus / 2));
         }
 
         if (raritate.ordinal() >= 2) { // RARE+
-            bonuses.put("damage_reduction", baseBonus);
+            bonuses.put("damage_reduction", Math.max(2, defenseBonus));
         }
 
         if (raritate.ordinal() >= 3) { // EPIC+
-            bonuses.put("fire_resistance", baseBonus);
-            bonuses.put("ice_resistance", baseBonus);
+            bonuses.put("fire_resistance", Math.max(3, defenseBonus));
+            bonuses.put("ice_resistance", Math.max(3, defenseBonus));
         }
 
         if (raritate == Raritate.LEGENDARY) {
-            bonuses.put("gold_find", baseBonus + 5);
+            bonuses.put("gold_find", Math.max(5, defenseBonus + 5));
             // Bonus special defensiv
             String[] defensiveBonuses = {"block_chance", "lifesteal"};
             String special = RandomUtils.randomElement(defensiveBonuses);
-            bonuses.put(special, Math.max(2, baseBonus / 2));
+            bonuses.put(special, Math.max(2, defenseBonus / 2));
         }
 
         return bonuses;
@@ -632,13 +649,13 @@ public class LootGenerator {
 
     private static Map<String, Integer> calculateShieldBonuses(Raritate raritate) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 2);
+        int statBonus = (int)(raritate.getMultiplier() * 2);
 
-        bonuses.put("defense", baseBonus * 2 + RandomUtils.randomInt(3, 6));
-        bonuses.put("viata", baseBonus * 10);
+        bonuses.put("defense", statBonus * 2 + RandomUtils.randomInt(3, 6));
+        bonuses.put("viata", statBonus * 10);
 
         if (raritate.ordinal() >= 1) {
-            bonuses.put("block_chance", baseBonus * 2);
+            bonuses.put("block_chance", statBonus * 2);
         }
 
         return bonuses;
@@ -646,27 +663,27 @@ public class LootGenerator {
 
     private static Map<String, Integer> calculateAccessoryBonuses(Raritate raritate) {
         Map<String, Integer> bonuses = new HashMap<>();
-        int baseBonus = (int)(raritate.getMultiplier() * 2);
+        int statBonus = (int)(raritate.getMultiplier() * 2);
 
         double roll = RandomUtils.randomDouble();
 
         if (roll < 0.33) {
-            bonuses.put("strength", baseBonus + RandomUtils.randomInt(0, 3));
-            bonuses.put("attack_bonus", baseBonus);
+            bonuses.put("strength", statBonus + RandomUtils.randomInt(0, 3));
+            bonuses.put("attack_bonus", statBonus);
         } else if (roll < 0.66) {
-            bonuses.put("dexterity", baseBonus + RandomUtils.randomInt(0, 3));
-            bonuses.put("crit_chance", baseBonus);
+            bonuses.put("dexterity", statBonus + RandomUtils.randomInt(0, 3));
+            bonuses.put("crit_chance", statBonus);
         } else {
-            bonuses.put("intelligence", baseBonus + RandomUtils.randomInt(0, 3));
-            bonuses.put("mana", baseBonus * 5);
+            bonuses.put("intelligence", statBonus + RandomUtils.randomInt(0, 3));
+            bonuses.put("mana", statBonus * 5);
         }
 
         if (raritate.ordinal() >= 3) {
             double secondRoll = RandomUtils.randomDouble();
             if (secondRoll < 0.5) {
-                bonuses.put("defense", baseBonus / 2);
+                bonuses.put("defense", statBonus / 2);
             } else {
-                bonuses.put("viata", baseBonus * 3);
+                bonuses.put("viata", statBonus * 3);
             }
         }
 

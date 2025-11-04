@@ -104,7 +104,7 @@ public class MainMenuController {
         layout.getChildren().addAll(title, subtitle, newGameBtn, loadGameBtn, optionsBtn, exitBtn);
         root.getChildren().addAll(backgroundImageView, layout);
 
-        Scene scene = new Scene(root, 800, 600);
+        Scene scene = new Scene(root, 1900, 1080);
 
         // BIND THE IMAGE SIZE TO SCENE SIZE - This is the key part!
         backgroundImageView.fitWidthProperty().bind(scene.widthProperty());

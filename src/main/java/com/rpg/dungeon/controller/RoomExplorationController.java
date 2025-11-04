@@ -145,8 +145,8 @@ public class RoomExplorationController {
         this.dungeonRun = dungeonRun;
         this.onRoomExit = onRoomExit;
 
-        // Initialize player at center of room
-        player = new PlayerSprite(ROOM_WIDTH / 2 - 16, ROOM_HEIGHT / 2 - 16);
+        // Initialize player at center of room (sprite is 64x64, so offset by half)
+        player = new PlayerSprite(ROOM_WIDTH / 2 - 32, ROOM_HEIGHT / 2 - 32);
 
         // Initialize enemies (new multi-enemy system)
         if (!room.isCleared()) {
@@ -215,12 +215,30 @@ public class RoomExplorationController {
      * Load all sprites for the room
      */
     private void loadSprites() {
-        // Load player animations (4 directions)
+        // Load player animations (4 directions, 8 frames each)
         playerAnimations = new HashMap<>();
-        playerAnimations.put(Direction.NORTH, new AnimatedSprite("player", "walk_up", 4, 0.1));
-        playerAnimations.put(Direction.SOUTH, new AnimatedSprite("player", "walk_down", 4, 0.1));
-        playerAnimations.put(Direction.EAST, new AnimatedSprite("player", "walk_right", 4, 0.1));
-        playerAnimations.put(Direction.WEST, new AnimatedSprite("player", "walk_left", 4, 0.1));
+
+        // METHOD 1: Individual frame files (current method)
+        // Requires: walk_up_0.png, walk_up_1.png, ..., walk_up_7.png
+//        playerAnimations.put(Direction.NORTH, new AnimatedSprite("player", "walk_up", 8, 0.1));
+//        playerAnimations.put(Direction.SOUTH, new AnimatedSprite("player", "walk_down", 8, 0.1));
+//        playerAnimations.put(Direction.EAST, new AnimatedSprite("player", "walk_right", 8, 0.1));
+//        playerAnimations.put(Direction.WEST, new AnimatedSprite("player", "walk_left", 8, 0.1));
+
+        // METHOD 2: Spritesheet (alternative - uncomment to use)
+        // Requires: Single spritesheet file per direction (e.g., walk_up_sheet.png)
+        // Each spritesheet should have 8 frames of 64x64 pixels arranged in a single row (512x64)
+
+        playerAnimations.put(Direction.NORTH,
+            AnimatedSprite.fromSpritesheet("player", "walk_up_sheet", 8, 0.1, 64, 64, 8, 1));
+        playerAnimations.put(Direction.SOUTH,
+            AnimatedSprite.fromSpritesheet("player", "walk_down_sheet", 8, 0.1, 64, 64, 8, 1));
+        playerAnimations.put(Direction.EAST,
+            AnimatedSprite.fromSpritesheet("player", "walk_right_sheet", 8, 0.1, 64, 64, 8, 1));
+        playerAnimations.put(Direction.WEST,
+            AnimatedSprite.fromSpritesheet("player", "walk_left_sheet", 8, 0.1, 64, 64, 8, 1));
+
+
         currentPlayerAnimation = playerAnimations.get(Direction.SOUTH); // Default facing down
 
         // Load tile sprites
@@ -320,7 +338,7 @@ public class RoomExplorationController {
         root.setBottom(createBottomPanel());
 
         // Create scene and setup input
-        Scene scene = new Scene(root, 1400, 1000);
+        Scene scene = new Scene(root, 1900, 1080);
         setupInput(scene);
 
         // Start game loop
@@ -2186,22 +2204,23 @@ public class RoomExplorationController {
      * Position player at door when entering from another room
      */
     private void repositionPlayerForEntry(PlayerSprite playerSprite, Direction entryDirection) {
+        // Player sprite is now 64x64 (was 32x32)
         switch (entryDirection) {
             case NORTH -> {
-                playerSprite.setX(ROOM_WIDTH / 2 - 16);
+                playerSprite.setX(ROOM_WIDTH / 2 - 32);  // Center horizontally (64/2)
                 playerSprite.setY(WALL_THICKNESS + 10);
             }
             case SOUTH -> {
-                playerSprite.setX(ROOM_WIDTH / 2 - 16);
-                playerSprite.setY(ROOM_HEIGHT - WALL_THICKNESS - 42);
+                playerSprite.setX(ROOM_WIDTH / 2 - 32);  // Center horizontally (64/2)
+                playerSprite.setY(ROOM_HEIGHT - WALL_THICKNESS - 74);  // 64 + 10 margin
             }
             case WEST -> {
                 playerSprite.setX(WALL_THICKNESS + 10);
-                playerSprite.setY(ROOM_HEIGHT / 2 - 16);
+                playerSprite.setY(ROOM_HEIGHT / 2 - 32);  // Center vertically (64/2)
             }
             case EAST -> {
-                playerSprite.setX(ROOM_WIDTH - WALL_THICKNESS - 42);
-                playerSprite.setY(ROOM_HEIGHT / 2 - 16);
+                playerSprite.setX(ROOM_WIDTH - WALL_THICKNESS - 74);  // 64 + 10 margin
+                playerSprite.setY(ROOM_HEIGHT / 2 - 32);  // Center vertically (64/2)
             }
         }
     }

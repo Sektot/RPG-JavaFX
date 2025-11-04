@@ -35,7 +35,7 @@ public class OptionsController {
         root.setCenter(createOptionsContent());
         root.setBottom(createFooter());
 
-        return new Scene(root, 800, 600);
+        return new Scene(root, 1900, 1080);
     }
 
     private VBox createHeader() {

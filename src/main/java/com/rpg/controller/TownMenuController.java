@@ -1,5 +1,7 @@
 package com.rpg.controller;
 
+import com.rpg.controller.AbilityCustomizationController;
+import com.rpg.controller.LoadoutSelectionController;
 import com.rpg.dungeon.controller.DungeonController;
 import com.rpg.model.characters.Erou;
 import com.rpg.model.characters.Inamic;
@@ -103,7 +105,7 @@ public class TownMenuController {
             mainContainer.getChildren().add(backgroundView);
 
             // Bind background size to scene
-            Scene scene = new Scene(mainContainer, 900, 700);
+            Scene scene = new Scene(mainContainer, 1900, 1080);
             backgroundView.fitWidthProperty().bind(scene.widthProperty());
             backgroundView.fitHeightProperty().bind(scene.heightProperty());
         }
@@ -121,7 +123,7 @@ public class TownMenuController {
 
         mainContainer.getChildren().add(root);
 
-        Scene scene = new Scene(mainContainer, 900, 700);
+        Scene scene = new Scene(mainContainer, 1900, 1080);
         return scene;
     }
 
@@ -220,6 +222,13 @@ public class TownMenuController {
             stage.setScene(characterController.createScene());
         });
 
+        // ⚡ ABILITY CUSTOMIZATION
+        Button abilityCustomBtn = createMenuButton("⚡ Customize Abilities", "#e94560");
+        abilityCustomBtn.setOnAction(e -> {
+            AbilityCustomizationController abilityController = new AbilityCustomizationController(stage, hero, createScene());
+            stage.setScene(abilityController.createScene());
+        });
+
         // 💾 SAVE
         Button saveBtn = createMenuButton("💾 Salvează Joc", "#16a085");
         saveBtn.setOnAction(e -> handleSave());
@@ -239,7 +248,7 @@ public class TownMenuController {
         menu.getChildren().addAll(
                 menuTitle,
                 dungeonBtn, dungeonUpgradesBtn, shopBtn, smithBtn, alchemyBtn, tavernBtn,
-                characterBtn, saveBtn, optionsBtn,
+                characterBtn, abilityCustomBtn, saveBtn, optionsBtn,
                 jewelTestBtn, exitBtn
         );
 
@@ -422,15 +431,28 @@ public class TownMenuController {
                     return;
                 }
 
-                // Launch dungeon at selected depth
-                com.rpg.dungeon.controller.DungeonController dungeonController =
-                    new com.rpg.dungeon.controller.DungeonController(
-                        stage,
-                        hero,
-                        selectedDepth,
-                        () -> returnToTown()
-                    );
-                stage.setScene(dungeonController.createScene());
+                // 🆕 STEP 2: Open Loadout Selection before entering dungeon
+                LoadoutSelectionController loadoutController = new LoadoutSelectionController(
+                    stage,
+                    hero,
+                    (enterDungeon) -> {
+                        if (enterDungeon) {
+                            // User confirmed - Launch dungeon at selected depth
+                            com.rpg.dungeon.controller.DungeonController dungeonController =
+                                new com.rpg.dungeon.controller.DungeonController(
+                                    stage,
+                                    hero,
+                                    selectedDepth,
+                                    () -> returnToTown()
+                                );
+                            stage.setScene(dungeonController.createScene());
+                        } else {
+                            // User cancelled - Return to town
+                            returnToTown();
+                        }
+                    }
+                );
+                stage.setScene(loadoutController.createScene());
             } catch (NumberFormatException e) {
                 DialogHelper.showError("Invalid Input", "Please enter a valid number!");
             }

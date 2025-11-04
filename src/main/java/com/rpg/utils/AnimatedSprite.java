@@ -1,11 +1,13 @@
 package com.rpg.utils;
 
 import javafx.scene.image.Image;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.WritableImage;
 
 /**
  * 🎬 Animated Sprite - Handles frame-based sprite animations
  *
- * USAGE:
+ * USAGE - Individual Frames:
  * AnimatedSprite playerAnim = new AnimatedSprite("player", "walk_down", 4, 0.15);
  * playerAnim.update(deltaTime);
  * Image currentFrame = playerAnim.getCurrentFrame();
@@ -16,8 +18,12 @@ import javafx.scene.image.Image;
  * player/walk_down_2.png
  * player/walk_down_3.png
  *
- * OR for single sprites:
- * player/idle_down.png (no frame number needed)
+ * USAGE - Spritesheet:
+ * AnimatedSprite playerAnim = AnimatedSprite.fromSpritesheet(
+ *     "player", "walk_down_sheet", 8, 0.15, 64, 64, 8, 1
+ * );
+ *
+ * This loads from a spritesheet with 8 frames of 64x64 pixels arranged in a single row
  */
 public class AnimatedSprite {
 
@@ -57,6 +63,89 @@ public class AnimatedSprite {
      */
     public AnimatedSprite(String category, String spriteName) {
         this(category, spriteName, 1, 0);
+    }
+
+    /**
+     * Private constructor for spritesheet-based animations
+     */
+    private AnimatedSprite(String category, String baseName, int frameCount, double frameDuration, Image[] preloadedFrames) {
+        this.category = category;
+        this.baseName = baseName;
+        this.frameCount = frameCount;
+        this.frameDuration = frameDuration;
+        this.currentFrame = 0;
+        this.frameTimer = 0;
+        this.loop = true;
+        this.frames = preloadedFrames;
+
+        // Set fallback to first frame
+        if (frames.length > 0 && frames[0] != null) {
+            fallbackImage = frames[0];
+        }
+    }
+
+    /**
+     * Create an animated sprite from a spritesheet
+     *
+     * @param category Sprite category (player, enemies, etc.)
+     * @param sheetName Name of the spritesheet file (e.g., "player_walk_sheet")
+     * @param frameCount Number of frames to extract
+     * @param frameDuration Seconds per frame (0.1 = 10 FPS)
+     * @param frameWidth Width of each frame in pixels
+     * @param frameHeight Height of each frame in pixels
+     * @param columns Number of frames per row in the spritesheet
+     * @param rows Number of rows in the spritesheet
+     * @return AnimatedSprite instance with frames extracted from spritesheet
+     */
+    public static AnimatedSprite fromSpritesheet(String category, String sheetName,
+                                                  int frameCount, double frameDuration,
+                                                  int frameWidth, int frameHeight,
+                                                  int columns, int rows) {
+        // Load the spritesheet image
+        Image spritesheet = SpriteManager.getSprite(category, sheetName);
+
+        if (spritesheet == null) {
+            System.err.println("⚠️ Spritesheet not found: " + category + "/" + sheetName);
+            // Return empty animation with fallback
+            Image[] emptyFrames = new Image[frameCount];
+            return new AnimatedSprite(category, sheetName, frameCount, frameDuration, emptyFrames);
+        }
+
+        // Extract frames from spritesheet
+        Image[] frames = extractFramesFromSheet(spritesheet, frameCount, frameWidth, frameHeight, columns, rows);
+
+        return new AnimatedSprite(category, sheetName, frameCount, frameDuration, frames);
+    }
+
+    /**
+     * Extract individual frames from a spritesheet
+     */
+    private static Image[] extractFramesFromSheet(Image spritesheet, int frameCount,
+                                                   int frameWidth, int frameHeight,
+                                                   int columns, int rows) {
+        Image[] frames = new Image[frameCount];
+        PixelReader reader = spritesheet.getPixelReader();
+
+        if (reader == null) {
+            System.err.println("⚠️ Cannot read spritesheet pixels");
+            return frames;
+        }
+
+        int frameIndex = 0;
+        for (int row = 0; row < rows && frameIndex < frameCount; row++) {
+            for (int col = 0; col < columns && frameIndex < frameCount; col++) {
+                int x = col * frameWidth;
+                int y = row * frameHeight;
+
+                // Extract frame
+                WritableImage frame = new WritableImage(reader, x, y, frameWidth, frameHeight);
+                frames[frameIndex] = frame;
+                frameIndex++;
+            }
+        }
+
+        System.out.println("✅ Extracted " + frameIndex + " frames from spritesheet");
+        return frames;
     }
 
     /**

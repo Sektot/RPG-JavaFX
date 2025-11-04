@@ -1,6 +1,9 @@
 package com.rpg.model.characters.classes;
 
 import com.rpg.model.abilities.Abilitate;
+import com.rpg.model.abilities.AbilityDefinitions;
+import com.rpg.model.abilities.AbilityType;
+import com.rpg.model.abilities.ConfiguredAbility;
 import com.rpg.utils.GameConstants;
 
 import java.io.Serializable;
@@ -21,7 +24,7 @@ public class Ardelean extends com.rpg.model.characters.Erou implements Serializa
     private boolean inteligenţaArdealului = false;
     private int putereVrajă = 0;
 
-    /**
+    /**i thin
      * Constructor pentru Ardelean.
      */
     public Ardelean(String nume) {
@@ -66,6 +69,19 @@ public class Ardelean extends com.rpg.model.characters.Erou implements Serializa
                 .setRequiredLevel(1)
                 .setBuff("BarieraMagica", 3, Map.of("defense", 1.3, "magic_resistance", 1.4));
         abilitati.add(bariera);
+
+        // 🆕 NEW SYSTEM: Unlock starting configured ability (Fireball)
+        if (AbilityDefinitions.getVariantsForAbility("Fireball") != null &&
+            !AbilityDefinitions.getVariantsForAbility("Fireball").isEmpty()) {
+            ConfiguredAbility fireball = AbilityDefinitions.createDefaultConfiguredAbility(
+                    AbilityDefinitions.createFireballBase(),
+                    AbilityDefinitions.createFireballVariants(),
+                    AbilityDefinitions.createFireballTalents()
+            );
+            this.unlockConfiguredAbility(fireball);
+            this.addAbilityToLoadout("Fireball");
+            System.out.println("✨ Starting Ability Unlocked: Fireball (customizable)");
+        }
     }
 
     @Override
@@ -77,6 +93,21 @@ public class Ardelean extends com.rpg.model.characters.Erou implements Serializa
                         Map.of("intelligence", 1.7), "Freeze", 2, 0);
                 gheata.setAbilityType(AbilityType.OFFENSIVE)
                         .setRequiredLevel(3);
+
+                // 🆕 NEW SYSTEM: Unlock Ice Shard at level 3
+                if (AbilityDefinitions.getVariantsForAbility("Ice Shard") != null) {
+                    ConfiguredAbility iceShard = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createIceShardBase(),
+                            AbilityDefinitions.createIceShardVariants(),
+                            AbilityDefinitions.createIceShardTalents()
+                    );
+                    this.unlockConfiguredAbility(iceShard);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Ice Shard");
+                    }
+                    System.out.println("❄️ New Ability Unlocked: Ice Shard (customizable)");
+                }
+
                 yield gheata;
             }
 
@@ -88,7 +119,40 @@ public class Ardelean extends com.rpg.model.characters.Erou implements Serializa
                         .setRequiredLevel(5)
                         .setAOE(true)
                         .setNumberOfHits(2);  // Hits twice
+
+                // 🆕 NEW SYSTEM: Unlock Lightning Bolt at level 5
+                if (AbilityDefinitions.getVariantsForAbility("Lightning Bolt") != null) {
+                    ConfiguredAbility lightning = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createLightningBoltBase(),
+                            AbilityDefinitions.createLightningBoltVariants(),
+                            AbilityDefinitions.createLightningBoltTalents()
+                    );
+                    this.unlockConfiguredAbility(lightning);
+                    // Auto-add to loadout if space available
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Lightning Bolt");
+                    }
+                    System.out.println("⚡ New Ability Unlocked: Lightning Bolt (customizable)");
+                }
+
                 yield explozie;
+            }
+
+            case 7 -> {
+                // 🆕 NEW SYSTEM: Unlock Arcane Missiles at level 7
+                if (AbilityDefinitions.getVariantsForAbility("Arcane Missiles") != null) {
+                    ConfiguredAbility arcaneMissiles = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createArcaneMissilesBase(),
+                            AbilityDefinitions.createArcaneMissilesVariants(),
+                            AbilityDefinitions.createArcaneMissilesTalents()
+                    );
+                    this.unlockConfiguredAbility(arcaneMissiles);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Arcane Missiles");
+                    }
+                    System.out.println("✨ New Ability Unlocked: Arcane Missiles (customizable)");
+                }
+                yield null;  // No old-system ability at level 7
             }
 
             case 8 -> {
@@ -109,6 +173,21 @@ public class Ardelean extends com.rpg.model.characters.Erou implements Serializa
                         .setRequiredLevel(10)
                         .setNumberOfHits(3)  // Hits 3 targets
                         .setAOE(true);
+
+                // 🆕 NEW SYSTEM: Unlock Meteor Strike at level 10
+                if (AbilityDefinitions.getVariantsForAbility("Meteor Strike") != null) {
+                    ConfiguredAbility meteorStrike = AbilityDefinitions.createDefaultConfiguredAbility(
+                            AbilityDefinitions.createMeteorStrikeBase(),
+                            AbilityDefinitions.createMeteorStrikeVariants(),
+                            AbilityDefinitions.createMeteorStrikeTalents()
+                    );
+                    this.unlockConfiguredAbility(meteorStrike);
+                    if (this.getLoadoutSize() < 6) {
+                        this.addAbilityToLoadout("Meteor Strike");
+                    }
+                    System.out.println("☄️ New Ability Unlocked: Meteor Strike (customizable)");
+                }
+
                 yield fulger;
             }
 

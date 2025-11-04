@@ -63,17 +63,21 @@ public class RoomContentService {
      * Difficulty scaling: enemiile devin mai puternice cu depth-ul
      */
     private void populateCombatRoom(Room room, int depth, Erou hero, boolean isBoss) {
-        // Difficulty scaling: +1 level la fiecare 2 depth-uri pentru normal enemies
-        // +2 levels pentru bossi
-        int levelBonus = isBoss ? (depth * 2) : ((depth - 1) / 2);
-        int enemyLevel = hero.getNivel() + levelBonus;
-
-        // Bossi sunt întotdeauna cu minimum 2 level-uri peste erou
-        if (isBoss) {
-            enemyLevel = Math.max(enemyLevel, hero.getNivel() + 2);
-        }
-
         Random random = new Random();
+
+        // 🔧 NEW FLOOR-BASED SCALING: Dungeon depth determines enemy level (not hero level)
+        // This allows players to tackle harder floors early (challenge) or farm easier floors (grind)
+        int floorMinLevel = (depth - 1) * 2 + 1;  // Floor 1 = 1, Floor 10 = 19, Floor 20 = 39
+        int floorMaxLevel = depth * 2 + 1;        // Floor 1 = 3, Floor 10 = 21, Floor 20 = 41
+
+        int enemyLevel;
+        if (isBoss) {
+            // Bosses are always 2 levels above max normal enemy on the same floor
+            enemyLevel = floorMaxLevel + 2;  // Floor 1 boss = 5, Floor 10 boss = 23
+        } else {
+            // Normal enemies vary within the floor's level range
+            enemyLevel = floorMinLevel + random.nextInt(floorMaxLevel - floorMinLevel + 1);
+        }
 
         if (isBoss) {
             // Boss rooms: Single boss enemy

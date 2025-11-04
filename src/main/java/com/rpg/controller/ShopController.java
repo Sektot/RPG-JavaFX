@@ -86,7 +86,7 @@ public class ShopController {
             mainContainer.getChildren().add(backgroundView);
 
             // Bind background size to scene
-            Scene scene = new Scene(mainContainer, 1000, 700);
+            Scene scene = new Scene(mainContainer, 1900, 1080);
             backgroundView.fitWidthProperty().bind(scene.widthProperty());
             backgroundView.fitHeightProperty().bind(scene.heightProperty());
         }
@@ -105,7 +105,7 @@ public class ShopController {
 
         mainContainer.getChildren().add(root);
 
-        Scene scene = new Scene(mainContainer, 1000, 700);
+        Scene scene = new Scene(mainContainer, 1900, 1080);
         return scene;
     }
 

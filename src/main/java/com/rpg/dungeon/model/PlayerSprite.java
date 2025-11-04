@@ -10,8 +10,8 @@ public class PlayerSprite implements Serializable {
 
     private double x;
     private double y;
-    private double width = 32;
-    private double height = 32;
+    private double width = 64;  // Increased from 32 for better visibility
+    private double height = 64; // Increased from 32 for better visibility
     private double speed = 3.0; // Pixels per frame
 
     private Direction facing = Direction.SOUTH; // Current facing direction

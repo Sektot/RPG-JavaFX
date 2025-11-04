@@ -3,6 +3,7 @@ package com.rpg.controller;
 import com.rpg.dungeon.model.MultiBattleState;
 import com.rpg.model.characters.Erou;
 import com.rpg.model.characters.Inamic;
+import com.rpg.model.effects.DebuffStack;
 import com.rpg.service.BattleServiceFX;
 import com.rpg.service.EnemyGeneratorRomanesc;
 import com.rpg.service.dto.AbilityDTO;
@@ -16,6 +17,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -65,8 +67,21 @@ public class BattleControllerFX {
     private Label enemyHPLabel;
     private ProgressBar enemyHPBar;
 
+    // Visual Feedback Components
+    private BorderPane battleRoot; // Root for screen shake
+    private com.rpg.ui.AnimatedHealthBar heroAnimatedHealthBar;
+    private com.rpg.ui.AnimatedHealthBar enemyAnimatedHealthBar;
+    private com.rpg.ui.StatusEffectDisplay heroBuffDisplay;
+    private com.rpg.ui.StatusEffectDisplay heroDebuffDisplay;
+    private com.rpg.ui.StatusEffectDisplay enemyBuffDisplay;
+    private com.rpg.ui.StatusEffectDisplay enemyDebuffDisplay;
+    private javafx.scene.layout.Pane battleCanvas; // For floating text
+
     // UI Components - Multi-Enemy
-    private VBox enemyPanelContainer; // Container for enemy panel (to refresh)
+    private VBox enemyPanelContainer; // Container for enemy panel (to refresh) - OLD LAYOUT
+    private VBox battleUILayer; // Main UI layer for cinematic layout
+    private HBox cinematicEnemySection; // Current enemy section in cinematic layout
+    private com.rpg.ui.AnimatedHealthBar[] multiEnemyHealthBars; // Health bars for each enemy slot (0-3)
 
     // Battle Log
     private TextArea battleLog;
@@ -106,21 +121,704 @@ public class BattleControllerFX {
     }
 
     public Scene createScene() {
-        BorderPane root = new BorderPane();
-        root.setTop(createHeader());
-        root.setCenter(createBattleArea());
-        root.setBottom(createActionPanel());
+        battleRoot = new BorderPane();
 
-        root.setStyle("-fx-background-color: #0f0f1e;");
+        // Create main battle view (Pokemon/Fear & Hunger style)
+        javafx.scene.layout.StackPane mainBattleView = createCinematicBattleView();
+
+        battleRoot.setCenter(mainBattleView);
+        battleRoot.setStyle("-fx-background-color: #0a0a0f;"); // Darker background
 
         // Inițializează bătălia
         initializeBattle();
 
-        return new Scene(root, 1200, 800);
+        return new Scene(battleRoot, 1900, 1080); // Full HD cinematic window
     }
 
     /**
-     * Header cu titlul
+     * Create cinematic battle view (Pokemon/Fear & Hunger style)
+     */
+    private javafx.scene.layout.StackPane createCinematicBattleView() {
+        javafx.scene.layout.StackPane mainStack = new javafx.scene.layout.StackPane();
+
+        // Layer 1: Battle background
+        javafx.scene.layout.Pane backgroundLayer = createBattleBackground();
+
+        // Layer 2: Main battle UI
+        battleUILayer = new VBox(); // Store reference for refreshing
+        battleUILayer.setAlignment(Pos.CENTER);
+        battleUILayer.setSpacing(20);
+        battleUILayer.setStyle("-fx-background-color: transparent;");
+
+        // Top section: Enemy
+        cinematicEnemySection = createCinematicEnemySection(); // Store reference for refreshing
+        cinematicEnemySection.setAlignment(Pos.TOP_CENTER);
+
+        // Middle section: Battle area (spacer)
+        javafx.scene.layout.Region battleSpacer = new javafx.scene.layout.Region();
+        VBox.setVgrow(battleSpacer, Priority.ALWAYS);
+
+        // Bottom section: Hero + Actions
+        javafx.scene.layout.HBox bottomSection = new javafx.scene.layout.HBox(20);
+        bottomSection.setAlignment(Pos.BOTTOM_CENTER);
+        bottomSection.setPadding(new Insets(20));
+
+        VBox heroSection = createCinematicHeroSection();
+        VBox actionsSection = createCinematicActionsSection();
+        VBox logSection = createCompactLogSection();
+
+        bottomSection.getChildren().addAll(heroSection, actionsSection, logSection);
+
+        battleUILayer.getChildren().addAll(cinematicEnemySection, battleSpacer, bottomSection);
+
+        // Layer 3: Floating text overlay
+        battleCanvas = new javafx.scene.layout.Pane();
+        battleCanvas.setMouseTransparent(true);
+
+        mainStack.getChildren().addAll(backgroundLayer, battleUILayer, battleCanvas);
+
+        return mainStack;
+    }
+
+    /**
+     * Create battle background with atmosphere
+     */
+    private javafx.scene.layout.Pane createBattleBackground() {
+        javafx.scene.layout.Pane background = new javafx.scene.layout.Pane();
+        background.setStyle(
+            "-fx-background-color: linear-gradient(to bottom, " +
+            "#1a1a2e 0%, " +
+            "#16213e 50%, " +
+            "#0f0f1e 100%);"
+        );
+
+        // Add some atmospheric elements (adjusted for 1900x1080 window)
+        for (int i = 0; i < 40; i++) {
+            javafx.scene.shape.Circle particle = new javafx.scene.shape.Circle(
+                Math.random() * 1900,
+                Math.random() * 1080,
+                1 + Math.random() * 2
+            );
+            particle.setFill(javafx.scene.paint.Color.rgb(255, 255, 255, 0.1 + Math.random() * 0.2));
+            background.getChildren().add(particle);
+        }
+
+        return background;
+    }
+
+    /**
+     * Create cinematic enemy section (top of screen)
+     */
+    private javafx.scene.layout.HBox createCinematicEnemySection() {
+        if (isMultiBattle && multiBattleState != null) {
+            return createMultiEnemyCinematicSection();
+        }
+
+        javafx.scene.layout.HBox enemyContainer = new javafx.scene.layout.HBox(30);
+        enemyContainer.setAlignment(Pos.CENTER);
+        enemyContainer.setPadding(new Insets(40, 40, 20, 40));
+        enemyContainer.setStyle(
+            "-fx-background-color: rgba(20, 20, 30, 0.8); " +
+            "-fx-background-radius: 15; " +
+            "-fx-border-color: #e74c3c; " +
+            "-fx-border-width: 3; " +
+            "-fx-border-radius: 15; " +
+            "-fx-effect: dropshadow(gaussian, rgba(231, 76, 60, 0.5), 20, 0.5, 0, 0);"
+        );
+
+        // Enemy portrait placeholder
+        VBox enemyPortrait = createEnemyPortraitPlaceholder();
+
+        // Enemy info panel
+        VBox enemyInfo = new VBox(10);
+        enemyInfo.setAlignment(Pos.CENTER_LEFT);
+        enemyInfo.setPrefWidth(400);
+
+        enemyNameLabel = new Label(enemy.getNume());
+        enemyNameLabel.setStyle(
+            "-fx-font-size: 32px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-text-fill: #e74c3c; " +
+            "-fx-effect: dropshadow(gaussian, black, 3, 0.8, 0, 0);"
+        );
+
+        if (enemy.isBoss()) {
+            Label bossLabel = new Label("💀 BOSS 💀");
+            bossLabel.setStyle(
+                "-fx-font-size: 20px; " +
+                "-fx-text-fill: #ff6b6b; " +
+                "-fx-font-weight: bold;"
+            );
+            enemyInfo.getChildren().add(bossLabel);
+        }
+
+        // Large animated health bar
+        enemyAnimatedHealthBar = new com.rpg.ui.AnimatedHealthBar(enemy.getViataMaxima());
+        enemyAnimatedHealthBar.updateHP(enemy.getViata(), false);
+        enemyAnimatedHealthBar.setPrefWidth(400);
+
+        // Status effects
+        HBox enemyStatus = new HBox(15);
+        enemyStatus.setAlignment(Pos.CENTER_LEFT);
+
+        enemyBuffDisplay = new com.rpg.ui.StatusEffectDisplay();
+        enemyDebuffDisplay = new com.rpg.ui.StatusEffectDisplay();
+
+        VBox buffsBox = new VBox(3);
+        Label buffsLabel = new Label("Buffs:");
+        buffsLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #3498db; -fx-font-weight: bold;");
+        buffsBox.getChildren().addAll(buffsLabel, enemyBuffDisplay);
+
+        VBox debuffsBox = new VBox(3);
+        Label debuffsLabel = new Label("Debuffs:");
+        debuffsLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #9b59b6; -fx-font-weight: bold;");
+        debuffsBox.getChildren().addAll(debuffsLabel, enemyDebuffDisplay);
+
+        enemyStatus.getChildren().addAll(buffsBox, debuffsBox);
+
+        enemyInfo.getChildren().addAll(enemyNameLabel, enemyAnimatedHealthBar, enemyStatus);
+
+        // Update displays
+        enemyBuffDisplay.updateBuffs(new java.util.HashMap<>());
+        enemyDebuffDisplay.updateDebuffs(enemy.getDebuffStacksActive()); // Full debuff info
+
+        enemyContainer.getChildren().addAll(enemyPortrait, enemyInfo);
+        return enemyContainer;
+    }
+
+    /**
+     * Create enemy portrait placeholder
+     */
+    private VBox createEnemyPortraitPlaceholder() {
+        VBox portrait = new VBox();
+        portrait.setAlignment(Pos.CENTER);
+        portrait.setPrefSize(150, 150);
+        portrait.setStyle(
+            "-fx-background-color: rgba(231, 76, 60, 0.2); " +
+            "-fx-background-radius: 10; " +
+            "-fx-border-color: #e74c3c; " +
+            "-fx-border-width: 2; " +
+            "-fx-border-radius: 10;"
+        );
+
+        Label enemyIcon = new Label("👹");
+        enemyIcon.setStyle("-fx-font-size: 80px;");
+
+        Label levelLabel = new Label("Lvl " + (enemy != null ? enemy.getNivel() : "?"));
+        levelLabel.setStyle(
+            "-fx-font-size: 14px; " +
+            "-fx-text-fill: white; " +
+            "-fx-font-weight: bold;"
+        );
+
+        portrait.getChildren().addAll(enemyIcon, levelLabel);
+        return portrait;
+    }
+
+    /**
+     * Create multi-enemy cinematic section (4 individual boxes in a horizontal row)
+     */
+    private javafx.scene.layout.HBox createMultiEnemyCinematicSection() {
+        javafx.scene.layout.VBox mainContainer = new javafx.scene.layout.VBox(15);
+        mainContainer.setAlignment(Pos.TOP_CENTER);
+        mainContainer.setPadding(new Insets(20));
+
+        // Initialize health bar array for 4 enemy slots (only if null - preserve existing bars)
+        if (multiEnemyHealthBars == null) {
+            multiEnemyHealthBars = new com.rpg.ui.AnimatedHealthBar[4];
+        }
+
+        // Title
+        Label title = new Label("⚔️ MULTI-BATTLE: " + multiBattleState.getActiveEnemyCount() + " ENEMIES");
+        title.setStyle("-fx-font-size: 20px; -fx-text-fill: #e74c3c; -fx-font-weight: bold;");
+
+        // Horizontal row for 4 enemy boxes (1x4 layout)
+        javafx.scene.layout.HBox enemyRow = new javafx.scene.layout.HBox(15);
+        enemyRow.setAlignment(Pos.CENTER);
+
+        // Create 4 enemy boxes in a row
+        for (int i = 0; i < 4; i++) {
+            VBox enemyBox = createIndividualEnemyBox(i);
+            enemyRow.getChildren().add(enemyBox);
+        }
+
+        mainContainer.getChildren().addAll(title, enemyRow);
+
+        // Wrap in HBox for centering
+        javafx.scene.layout.HBox wrapper = new javafx.scene.layout.HBox(mainContainer);
+        wrapper.setAlignment(Pos.TOP_CENTER);
+
+        return wrapper;
+    }
+
+    /**
+     * Create individual enemy box for multi-battle
+     */
+    private VBox createIndividualEnemyBox(int slotIndex) {
+        VBox enemyBox = new VBox(10);
+        enemyBox.setAlignment(Pos.CENTER);
+        enemyBox.setPadding(new Insets(15));
+        enemyBox.setPrefWidth(320);
+        enemyBox.setPrefHeight(200);
+
+        MultiBattleState.BattleSlot slot = multiBattleState.getSlot(slotIndex);
+
+        if (slot.isActive() && slot.getEnemy() != null && slot.getEnemy().esteViu()) {
+            // Active enemy
+            Inamic enemy = slot.getEnemy();
+            boolean isSelected = (slotIndex == selectedSlotIndex);
+
+            // Style based on selection
+            String borderColor = isSelected ? "#FFD700" : "#e74c3c";
+            String borderWidth = isSelected ? "4" : "2";
+            String glowColor = isSelected ? "rgba(255, 215, 0, 0.6)" : "rgba(231, 76, 60, 0.4)";
+
+            enemyBox.setStyle(
+                "-fx-background-color: rgba(20, 20, 30, 0.85); " +
+                "-fx-background-radius: 12; " +
+                "-fx-border-color: " + borderColor + "; " +
+                "-fx-border-width: " + borderWidth + "; " +
+                "-fx-border-radius: 12; " +
+                "-fx-effect: dropshadow(gaussian, " + glowColor + ", 15, 0.6, 0, 0); " +
+                "-fx-cursor: hand;"
+            );
+
+            // Enemy portrait (smaller for grid)
+            VBox portrait = new VBox();
+            portrait.setAlignment(Pos.CENTER);
+            portrait.setPrefSize(80, 80);
+            portrait.setStyle(
+                "-fx-background-color: rgba(231, 76, 60, 0.2); " +
+                "-fx-background-radius: 8; " +
+                "-fx-border-color: #e74c3c; " +
+                "-fx-border-width: 2; " +
+                "-fx-border-radius: 8;"
+            );
+
+            Label enemyIcon = new Label("👹");
+            enemyIcon.setStyle("-fx-font-size: 50px;");
+            portrait.getChildren().add(enemyIcon);
+
+            // Enemy info
+            HBox nameRow = new HBox(5);
+            nameRow.setAlignment(Pos.CENTER);
+
+            if (isSelected) {
+                Label targetIcon = new Label("🎯");
+                targetIcon.setStyle("-fx-font-size: 14px;");
+                nameRow.getChildren().add(targetIcon);
+            }
+
+            Label nameLabel = new Label("Slot " + (slotIndex + 1) + ": " + enemy.getNume());
+            nameLabel.setStyle(
+                "-fx-font-size: 14px; " +
+                "-fx-font-weight: bold; " +
+                "-fx-text-fill: " + (isSelected ? "#FFD700" : "#e74c3c") + ";"
+            );
+            nameLabel.setWrapText(true);
+            nameLabel.setMaxWidth(280);
+            nameRow.getChildren().add(nameLabel);
+
+            Label levelLabel = new Label("Lvl " + enemy.getNivel());
+            levelLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #95a5a6;");
+
+            // Animated health bar (compact) - reuse existing if available and same enemy
+            com.rpg.ui.AnimatedHealthBar healthBar;
+            if (multiEnemyHealthBars[slotIndex] != null &&
+                multiEnemyHealthBars[slotIndex].getMaxHP() == enemy.getViataMaxima()) {
+                // Reuse existing health bar for the same enemy
+                healthBar = multiEnemyHealthBars[slotIndex];
+                // Don't animate when just refreshing the UI
+                // The actual damage animation happens in showCombatVisualFeedback
+            } else {
+                // Create new health bar (first time or different enemy/reinforcement)
+                healthBar = new com.rpg.ui.AnimatedHealthBar(enemy.getViataMaxima());
+                healthBar.updateHP(enemy.getViata(), false);
+                multiEnemyHealthBars[slotIndex] = healthBar;
+            }
+            healthBar.setPrefWidth(280);
+
+            // Buff/Debuff displays (compact)
+            HBox statusRow = new HBox(10);
+            statusRow.setAlignment(Pos.CENTER);
+
+            com.rpg.ui.StatusEffectDisplay buffsDisplay = new com.rpg.ui.StatusEffectDisplay();
+            com.rpg.ui.StatusEffectDisplay debuffsDisplay = new com.rpg.ui.StatusEffectDisplay();
+
+            VBox buffsBox = new VBox(2);
+            Label buffsLabel = new Label("Buffs:");
+            buffsLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #3498db; -fx-font-weight: bold;");
+            buffsBox.getChildren().addAll(buffsLabel, buffsDisplay);
+
+            VBox debuffsBox = new VBox(2);
+            Label debuffsLabel = new Label("Debuffs:");
+            debuffsLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #9b59b6; -fx-font-weight: bold;");
+            debuffsBox.getChildren().addAll(debuffsLabel, debuffsDisplay);
+
+            statusRow.getChildren().addAll(buffsBox, debuffsBox);
+
+            // Update displays
+            buffsDisplay.updateBuffs(new java.util.HashMap<>());
+            debuffsDisplay.updateDebuffs(enemy.getDebuffStacksActive()); // Show enemy debuffs with full info
+
+            enemyBox.getChildren().addAll(portrait, nameRow, levelLabel, healthBar, statusRow);
+
+            // Make clickable for targeting
+            enemyBox.setOnMouseClicked(event -> selectEnemyTarget(slotIndex));
+
+            // Hover effect
+            enemyBox.setOnMouseEntered(event -> {
+                if (slotIndex != selectedSlotIndex) {
+                    enemyBox.setStyle(
+                        "-fx-background-color: rgba(30, 30, 40, 0.9); " +
+                        "-fx-background-radius: 12; " +
+                        "-fx-border-color: #e74c3c; " +
+                        "-fx-border-width: 3; " +
+                        "-fx-border-radius: 12; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(231, 76, 60, 0.7), 20, 0.8, 0, 0); " +
+                        "-fx-cursor: hand;"
+                    );
+                }
+            });
+
+            enemyBox.setOnMouseExited(event -> {
+                if (slotIndex != selectedSlotIndex) {
+                    enemyBox.setStyle(
+                        "-fx-background-color: rgba(20, 20, 30, 0.85); " +
+                        "-fx-background-radius: 12; " +
+                        "-fx-border-color: #e74c3c; " +
+                        "-fx-border-width: 2; " +
+                        "-fx-border-radius: 12; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(231, 76, 60, 0.4), 15, 0.6, 0, 0); " +
+                        "-fx-cursor: hand;"
+                    );
+                }
+            });
+
+        } else {
+            // Empty slot or incoming reinforcement
+            // Clear health bar reference for this slot
+            multiEnemyHealthBars[slotIndex] = null;
+
+            MultiBattleState.ReinforcementEntry nextReinforcement = multiBattleState.getNextReinforcement();
+
+            if (nextReinforcement != null && multiBattleState.getActiveEnemyCount() < MultiBattleState.MAX_ACTIVE_ENEMIES) {
+                // Show reinforcement countdown
+                enemyBox.setStyle(
+                    "-fx-background-color: rgba(20, 20, 30, 0.5); " +
+                    "-fx-background-radius: 12; " +
+                    "-fx-border-color: #f39c12; " +
+                    "-fx-border-width: 2; " +
+                    "-fx-border-style: dashed; " +
+                    "-fx-border-radius: 12;"
+                );
+
+                Label emptyIcon = new Label("⏳");
+                emptyIcon.setStyle("-fx-font-size: 50px;");
+
+                Label slotLabel = new Label("Slot " + (slotIndex + 1) + ": EMPTY");
+                slotLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #95a5a6;");
+
+                int turnsRemaining = nextReinforcement.getTurnsRemaining(multiBattleState.getCurrentTurn());
+                Label countdownLabel = new Label("⏰ " + nextReinforcement.getEnemy().getNume());
+                countdownLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #f39c12;");
+                countdownLabel.setWrapText(true);
+                countdownLabel.setMaxWidth(280);
+
+                Label turnsLabel = new Label("Arriving in " + turnsRemaining + " turns");
+                turnsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #f39c12;");
+
+                enemyBox.getChildren().addAll(emptyIcon, slotLabel, countdownLabel, turnsLabel);
+
+            } else {
+                // Completely empty
+                enemyBox.setStyle(
+                    "-fx-background-color: rgba(15, 15, 20, 0.5); " +
+                    "-fx-background-radius: 12; " +
+                    "-fx-border-color: #34495e; " +
+                    "-fx-border-width: 1; " +
+                    "-fx-border-style: dashed; " +
+                    "-fx-border-radius: 12;"
+                );
+
+                Label emptyIcon = new Label("○");
+                emptyIcon.setStyle("-fx-font-size: 60px; -fx-text-fill: #34495e;");
+
+                Label emptyLabel = new Label("Slot " + (slotIndex + 1) + ": EMPTY");
+                emptyLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #34495e;");
+
+                enemyBox.getChildren().addAll(emptyIcon, emptyLabel);
+            }
+        }
+
+        return enemyBox;
+    }
+
+    /**
+     * Create cinematic hero section (bottom-left)
+     */
+    private VBox createCinematicHeroSection() {
+        VBox heroContainer = new VBox(15);
+        heroContainer.setAlignment(Pos.BOTTOM_LEFT);
+        heroContainer.setPadding(new Insets(20));
+        heroContainer.setPrefWidth(400);
+        heroContainer.setStyle(
+            "-fx-background-color: rgba(20, 30, 20, 0.8); " +
+            "-fx-background-radius: 15; " +
+            "-fx-border-color: #27ae60; " +
+            "-fx-border-width: 3; " +
+            "-fx-border-radius: 15; " +
+            "-fx-effect: dropshadow(gaussian, rgba(39, 174, 96, 0.5), 20, 0.5, 0, 0);"
+        );
+
+        // Hero portrait
+        HBox heroTop = new HBox(20);
+        heroTop.setAlignment(Pos.CENTER_LEFT);
+
+        VBox heroPortrait = createHeroPortraitPlaceholder();
+
+        VBox heroInfo = new VBox(10);
+        heroInfo.setAlignment(Pos.CENTER_LEFT);
+
+        heroNameLabel = new Label(hero.getNume());
+        heroNameLabel.setStyle(
+            "-fx-font-size: 28px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-text-fill: #27ae60; " +
+            "-fx-effect: dropshadow(gaussian, black, 3, 0.8, 0, 0);"
+        );
+
+        Label classLabel = new Label(hero.getClass().getSimpleName() + " • Lvl " + hero.getNivel());
+        classLabel.setStyle(
+            "-fx-font-size: 14px; " +
+            "-fx-text-fill: #95a5a6;"
+        );
+
+        heroInfo.getChildren().addAll(heroNameLabel, classLabel);
+        heroTop.getChildren().addAll(heroPortrait, heroInfo);
+
+        // Health bar
+        Label hpLabel = new Label("❤️ HEALTH");
+        hpLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: white; -fx-font-weight: bold;");
+
+        heroAnimatedHealthBar = new com.rpg.ui.AnimatedHealthBar(hero.getViataMaxima());
+        heroAnimatedHealthBar.updateHP(hero.getViata(), false);
+        heroAnimatedHealthBar.setPrefWidth(360);
+
+        // Resource bar
+        Label resourceLabel = new Label("💙 " + hero.getTipResursa().toUpperCase());
+        resourceLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: white; -fx-font-weight: bold;");
+
+        heroResourceBar = new ProgressBar();
+        heroResourceBar.setPrefWidth(360);
+        heroResourceBar.setPrefHeight(15);
+        heroResourceBar.setProgress((double)hero.getResursaCurenta() / hero.getResursaMaxima());
+        heroResourceBar.setStyle("-fx-accent: #3498db;");
+
+        heroResourceLabel = new Label(hero.getResursaCurenta() + " / " + hero.getResursaMaxima());
+        heroResourceLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: white;");
+
+        // Status effects
+        HBox statusRow = new HBox(15);
+        statusRow.setAlignment(Pos.CENTER_LEFT);
+
+        heroBuffDisplay = new com.rpg.ui.StatusEffectDisplay();
+        heroDebuffDisplay = new com.rpg.ui.StatusEffectDisplay();
+
+        VBox buffsBox = new VBox(3);
+        Label buffsLabel = new Label("Buffs:");
+        buffsLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #3498db; -fx-font-weight: bold;");
+        buffsBox.getChildren().addAll(buffsLabel, heroBuffDisplay);
+
+        VBox debuffsBox = new VBox(3);
+        Label debuffsLabel = new Label("Debuffs:");
+        debuffsLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #9b59b6; -fx-font-weight: bold;");
+        debuffsBox.getChildren().addAll(debuffsLabel, heroDebuffDisplay);
+
+        statusRow.getChildren().addAll(buffsBox, debuffsBox);
+
+        // Update displays
+        heroBuffDisplay.updateBuffs(hero.getBuffuriActive());
+        heroDebuffDisplay.updateDebuffs(hero.getDebuffuriActive()); // Full debuff info
+
+        heroContainer.getChildren().addAll(
+            heroTop,
+            hpLabel, heroAnimatedHealthBar,
+            resourceLabel, heroResourceBar, heroResourceLabel,
+            statusRow
+        );
+
+        return heroContainer;
+    }
+
+    /**
+     * Create hero portrait placeholder
+     */
+    private VBox createHeroPortraitPlaceholder() {
+        VBox portrait = new VBox();
+        portrait.setAlignment(Pos.CENTER);
+        portrait.setPrefSize(100, 100);
+        portrait.setStyle(
+            "-fx-background-color: rgba(39, 174, 96, 0.2); " +
+            "-fx-background-radius: 10; " +
+            "-fx-border-color: #27ae60; " +
+            "-fx-border-width: 2; " +
+            "-fx-border-radius: 10;"
+        );
+
+        Label heroIcon = new Label("⚔️");
+        heroIcon.setStyle("-fx-font-size: 60px;");
+
+        portrait.getChildren().add(heroIcon);
+        return portrait;
+    }
+
+    /**
+     * Create cinematic actions section (bottom-right)
+     */
+    private VBox createCinematicActionsSection() {
+        VBox actionsContainer = new VBox(10);
+        actionsContainer.setAlignment(Pos.BOTTOM_RIGHT);
+        actionsContainer.setPadding(new Insets(20));
+        actionsContainer.setPrefWidth(450);
+        actionsContainer.setStyle(
+            "-fx-background-color: rgba(30, 30, 40, 0.9); " +
+            "-fx-background-radius: 15; " +
+            "-fx-border-color: #9b59b6; " +
+            "-fx-border-width: 2; " +
+            "-fx-border-radius: 15;"
+        );
+
+        // Main actions
+        HBox mainActions = new HBox(10);
+        mainActions.setAlignment(Pos.CENTER);
+
+        attackButton = createCinematicActionButton("⚔️ ATTACK", "#27ae60");
+        attackButton.setOnAction(e -> handleNormalAttack());
+
+        fleeButton = createCinematicActionButton("🏃 FLEE", "#e67e22");
+        fleeButton.setOnAction(e -> handleFlee());
+
+        mainActions.getChildren().addAll(attackButton, fleeButton);
+
+        // Abilities
+        Label abilitiesLabel = new Label("✨ ABILITIES");
+        abilitiesLabel.setStyle(
+            "-fx-font-size: 16px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-text-fill: #9b59b6;"
+        );
+
+        abilityButtonsPanel = new VBox(5);
+        abilityButtonsPanel.setAlignment(Pos.CENTER);
+
+        // Potions
+        Label potionsLabel = new Label("🧪 POTIONS");
+        potionsLabel.setStyle(
+            "-fx-font-size: 16px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-text-fill: #2ecc71;"
+        );
+
+        potionButtonsPanel = new VBox(5);
+        potionButtonsPanel.setAlignment(Pos.CENTER);
+
+        actionsContainer.getChildren().addAll(
+            mainActions,
+            new javafx.scene.control.Separator(),
+            abilitiesLabel, abilityButtonsPanel,
+            new javafx.scene.control.Separator(),
+            potionsLabel, potionButtonsPanel
+        );
+
+        return actionsContainer;
+    }
+
+    /**
+     * Create compact battle log section
+     */
+    private VBox createCompactLogSection() {
+        VBox logContainer = new VBox(5);
+        logContainer.setAlignment(Pos.BOTTOM_RIGHT);
+        logContainer.setPadding(new Insets(10));
+        logContainer.setPrefWidth(300);
+        logContainer.setPrefHeight(400);
+        logContainer.setStyle(
+            "-fx-background-color: rgba(15, 15, 20, 0.9); " +
+            "-fx-background-radius: 10; " +
+            "-fx-border-color: #34495e; " +
+            "-fx-border-width: 2; " +
+            "-fx-border-radius: 10;"
+        );
+
+        Label logLabel = new Label("📜 BATTLE LOG");
+        logLabel.setStyle(
+            "-fx-font-size: 14px; " +
+            "-fx-text-fill: #95a5a6; " +
+            "-fx-font-weight: bold;"
+        );
+
+        battleLog = new TextArea();
+        battleLog.setEditable(false);
+        battleLog.setWrapText(true);
+        battleLog.setStyle(
+            "-fx-control-inner-background: #0f0f1e; " +
+            "-fx-text-fill: #ecf0f1; " +
+            "-fx-font-family: 'Courier New'; " +
+            "-fx-font-size: 11px;"
+        );
+        battleLog.setPrefWidth(280);
+        battleLog.setPrefHeight(350);
+        VBox.setVgrow(battleLog, Priority.ALWAYS);
+
+        logContainer.getChildren().addAll(logLabel, battleLog);
+        return logContainer;
+    }
+
+    /**
+     * Create cinematic action button
+     */
+    private Button createCinematicActionButton(String text, String color) {
+        Button btn = new Button(text);
+        btn.setPrefWidth(200);
+        btn.setPrefHeight(45);
+        btn.setStyle(
+            "-fx-font-size: 16px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-background-color: " + color + "; " +
+            "-fx-text-fill: white; " +
+            "-fx-background-radius: 10; " +
+            "-fx-cursor: hand; " +
+            "-fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 5, 0.5, 0, 2);"
+        );
+
+        btn.setOnMouseEntered(e -> btn.setStyle(
+            "-fx-font-size: 16px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-background-color: derive(" + color + ", 20%); " +
+            "-fx-text-fill: white; " +
+            "-fx-background-radius: 10; " +
+            "-fx-cursor: hand; " +
+            "-fx-effect: dropshadow(gaussian, " + color + ", 10, 0.8, 0, 0); " +
+            "-fx-scale-x: 1.05; " +
+            "-fx-scale-y: 1.05;"
+        ));
+
+        btn.setOnMouseExited(e -> btn.setStyle(
+            "-fx-font-size: 16px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-background-color: " + color + "; " +
+            "-fx-text-fill: white; " +
+            "-fx-background-radius: 10; " +
+            "-fx-cursor: hand; " +
+            "-fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 5, 0.5, 0, 2);"
+        ));
+
+        return btn;
+    }
+
+    /**
+     * Header cu titlul (DEPRECATED - keeping for compatibility)
      */
     private VBox createHeader() {
         VBox header = new VBox(5);
@@ -159,7 +857,8 @@ public class BattleControllerFX {
     /**
      * Zona de luptă - Hero, Log, Enemy
      */
-    private HBox createBattleArea() {
+    private javafx.scene.layout.StackPane createBattleArea() {
+        // Base layer with panels
         HBox battleArea = new HBox(20);
         battleArea.setPadding(new Insets(20));
         battleArea.setAlignment(Pos.CENTER);
@@ -170,7 +869,15 @@ public class BattleControllerFX {
 
         battleArea.getChildren().addAll(heroPanel, logPanel, enemyPanelContainer);
 
-        return battleArea;
+        // Overlay layer for floating text
+        battleCanvas = new javafx.scene.layout.Pane();
+        battleCanvas.setMouseTransparent(true); // Allow clicks to pass through
+
+        // Stack them
+        javafx.scene.layout.StackPane stack = new javafx.scene.layout.StackPane();
+        stack.getChildren().addAll(battleArea, battleCanvas);
+
+        return stack;
     }
 
     /**
@@ -214,11 +921,39 @@ public class BattleControllerFX {
         heroResourceLabel = new Label(hero.getResursaCurenta() + " / " + hero.getResursaMaxima());
         heroResourceLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: white;");
 
+        // Animated health bar
+        heroAnimatedHealthBar = new com.rpg.ui.AnimatedHealthBar(hero.getViataMaxima());
+        heroAnimatedHealthBar.updateHP(hero.getViata(), false);
+
+        // Status effect displays
+        heroBuffDisplay = new com.rpg.ui.StatusEffectDisplay();
+        heroDebuffDisplay = new com.rpg.ui.StatusEffectDisplay();
+
+        HBox statusRow = new HBox(5);
+        statusRow.setAlignment(Pos.CENTER);
+
+        VBox buffsSection = new VBox(3);
+        Label buffsTitle = new Label("Buffs:");
+        buffsTitle.setStyle("-fx-font-size: 11px; -fx-text-fill: #3498db; -fx-font-weight: bold;");
+        buffsSection.getChildren().addAll(buffsTitle, heroBuffDisplay);
+
+        VBox debuffsSection = new VBox(3);
+        Label debuffsTitle = new Label("Debuffs:");
+        debuffsTitle.setStyle("-fx-font-size: 11px; -fx-text-fill: #9b59b6; -fx-font-weight: bold;");
+        debuffsSection.getChildren().addAll(debuffsTitle, heroDebuffDisplay);
+
+        statusRow.getChildren().addAll(buffsSection, debuffsSection);
+
         panel.getChildren().addAll(
                 heroNameLabel,
-                hpTextLabel, heroHPBar, heroHPLabel,
-                resourceTextLabel, heroResourceBar, heroResourceLabel
+                hpTextLabel, heroAnimatedHealthBar,
+                resourceTextLabel, heroResourceBar, heroResourceLabel,
+                statusRow
         );
+
+        // Update status displays with initial buffs and debuffs
+        heroBuffDisplay.updateBuffs(hero.getBuffuriActive());
+        heroDebuffDisplay.updateDebuffs(hero.getDebuffuriActive()); // Show hero debuffs with full info
 
         // Show active run item buffs
         VBox buffsPanel = createRunItemBuffsPanel();
@@ -348,10 +1083,38 @@ public class BattleControllerFX {
         enemyHPLabel = new Label(enemy.getViata() + " / " + enemy.getViataMaxima());
         enemyHPLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: white; -fx-font-weight: bold;");
 
+        // Animated health bar
+        enemyAnimatedHealthBar = new com.rpg.ui.AnimatedHealthBar(enemy.getViataMaxima());
+        enemyAnimatedHealthBar.updateHP(enemy.getViata(), false);
+
+        // Status effect displays
+        enemyBuffDisplay = new com.rpg.ui.StatusEffectDisplay();
+        enemyDebuffDisplay = new com.rpg.ui.StatusEffectDisplay();
+
+        HBox statusRow = new HBox(5);
+        statusRow.setAlignment(Pos.CENTER);
+
+        VBox buffsSection = new VBox(3);
+        Label buffsTitle = new Label("Buffs:");
+        buffsTitle.setStyle("-fx-font-size: 11px; -fx-text-fill: #3498db; -fx-font-weight: bold;");
+        buffsSection.getChildren().addAll(buffsTitle, enemyBuffDisplay);
+
+        VBox debuffsSection = new VBox(3);
+        Label debuffsTitle = new Label("Debuffs:");
+        debuffsTitle.setStyle("-fx-font-size: 11px; -fx-text-fill: #9b59b6; -fx-font-weight: bold;");
+        debuffsSection.getChildren().addAll(debuffsTitle, enemyDebuffDisplay);
+
+        statusRow.getChildren().addAll(buffsSection, debuffsSection);
+
         panel.getChildren().addAll(
                 enemyNameLabel,
-                hpTextLabel, enemyHPBar, enemyHPLabel
+                hpTextLabel, enemyAnimatedHealthBar,
+                statusRow
         );
+
+        // Update status displays (enemies don't have buffs, debuffs are shown)
+        enemyBuffDisplay.updateBuffs(new java.util.HashMap<>()); // Empty - enemies don't get buffed
+        enemyDebuffDisplay.updateDebuffs(enemy.getDebuffStacksActive()); // Show enemy debuffs with full info
 
         return panel;
     }
@@ -520,21 +1283,39 @@ public class BattleControllerFX {
      * Refresh multi-enemy panel (update HP bars, countdowns, slots)
      */
     private void refreshMultiEnemyPanel() {
-        if (!isMultiBattle || multiBattleState == null || enemyPanelContainer == null) {
+        if (!isMultiBattle || multiBattleState == null) {
             return;
         }
 
-        // Recreate the multi-enemy panel
-        VBox newPanel = createMultiEnemyPanel();
+        // CINEMATIC LAYOUT (new)
+        if (battleUILayer != null && cinematicEnemySection != null) {
+            // Recreate the cinematic enemy section
+            HBox newEnemySection = createMultiEnemyCinematicSection();
+            newEnemySection.setAlignment(Pos.TOP_CENTER);
 
-        // Replace content in container
-        enemyPanelContainer.getChildren().clear();
-        enemyPanelContainer.getChildren().addAll(newPanel.getChildren());
+            // Replace old enemy section with new one in battleUILayer
+            int enemySectionIndex = battleUILayer.getChildren().indexOf(cinematicEnemySection);
+            if (enemySectionIndex >= 0) {
+                battleUILayer.getChildren().set(enemySectionIndex, newEnemySection);
+                cinematicEnemySection = newEnemySection; // Update reference
+            }
+            return;
+        }
 
-        // Copy styles
-        enemyPanelContainer.setStyle(newPanel.getStyle());
-        enemyPanelContainer.setPadding(newPanel.getPadding());
-        enemyPanelContainer.setAlignment(newPanel.getAlignment());
+        // OLD LAYOUT (fallback for non-cinematic battles)
+        if (enemyPanelContainer != null) {
+            // Recreate the multi-enemy panel
+            VBox newPanel = createMultiEnemyPanel();
+
+            // Replace content in container
+            enemyPanelContainer.getChildren().clear();
+            enemyPanelContainer.getChildren().addAll(newPanel.getChildren());
+
+            // Copy styles
+            enemyPanelContainer.setStyle(newPanel.getStyle());
+            enemyPanelContainer.setPadding(newPanel.getPadding());
+            enemyPanelContainer.setAlignment(newPanel.getAlignment());
+        }
     }
 
     /**
@@ -804,6 +1585,9 @@ public class BattleControllerFX {
 
         addToLog(result.getLog());
 
+        // Visual feedback
+        showCombatVisualFeedback(result, target);
+
         if (result.isBattleOver()) {
             handleBattleEnd(result);
         } else {
@@ -881,6 +1665,9 @@ public class BattleControllerFX {
 
         addToLog(result.getLog());
 
+        // Visual feedback
+        showCombatVisualFeedback(result, target);
+
         if (result.isBattleOver()) {
             handleBattleEnd(result);
         } else {
@@ -896,6 +1683,9 @@ public class BattleControllerFX {
     }
 
     private void handlePotionUse(int healAmount) {
+        // Sound effect for potion use
+        com.rpg.utils.SoundManager.play(com.rpg.utils.SoundManager.SoundEffect.POTION_USE);
+
         // 🔄 MIGRARE AUTOMATĂ (păstrează din fix-ul anterior)
         if (hero.getInventar().getHealthPotions().isEmpty() && hero.getHealthPotions() > 0) {
             hero.getInventar().getHealthPotions().put(healAmount, hero.getHealthPotions());
@@ -980,6 +1770,9 @@ public class BattleControllerFX {
     }
 
     private void showVictoryScreen(AbilityDTO.BattleResultDTO result) {
+        // Victory sound
+        com.rpg.utils.SoundManager.play(com.rpg.utils.SoundManager.SoundEffect.VICTORY);
+
         StringBuilder victoryMsg = new StringBuilder();
         victoryMsg.append("🎉 VICTORIE! 🎉 \n \n");
         victoryMsg.append("Recompense: \n");
@@ -1022,6 +1815,9 @@ public class BattleControllerFX {
 
             // 🎉 DIALOG LEVEL-UP
             if (newLevel > oldLevel) {
+                // Level up sound
+                com.rpg.utils.SoundManager.play(com.rpg.utils.SoundManager.SoundEffect.LEVEL_UP);
+
                 StringBuilder levelUpMsg = new StringBuilder();
                 levelUpMsg.append("🎉 LEVEL UP! 🎉 \n \n");
 
@@ -1119,6 +1915,9 @@ public class BattleControllerFX {
 
 
     private void showDefeatScreen() {
+        // Defeat sound
+        com.rpg.utils.SoundManager.play(com.rpg.utils.SoundManager.SoundEffect.DEFEAT);
+
         // Disable all buttons to prevent further actions
         disableAllButtons();
 
@@ -1164,6 +1963,242 @@ public class BattleControllerFX {
         stage.setScene(townController.createScene());
     }
 
+    // ==================== VISUAL FEEDBACK ====================
+
+    /**
+     * Show visual feedback for combat actions (floating text, screen shake, etc.)
+     */
+    private void showCombatVisualFeedback(AbilityDTO.BattleTurnResultDTO result, Inamic target) {
+        if (result == null || battleCanvas == null || battleRoot == null) {
+            return;
+        }
+
+        String log = result.getLog();
+
+        // Calculate positions
+        double canvasWidth = battleCanvas.getWidth() > 0 ? battleCanvas.getWidth() : 1900;
+        double canvasHeight = battleCanvas.getHeight() > 0 ? battleCanvas.getHeight() : 1080;
+
+        double enemyX;
+        double enemyY;
+
+        // For multi-battle, position floating text next to the specific enemy slot
+        if (isMultiBattle && selectedSlotIndex >= 0 && selectedSlotIndex < 4) {
+            // Calculate position for the specific enemy slot (1x4 horizontal layout)
+            // Each box is 320px wide with 15px spacing
+            int boxWidth = 320;
+            int spacing = 15;
+            int totalWidth = (boxWidth * 4) + (spacing * 3); // 1325px
+            double startX = (canvasWidth - totalWidth) / 2.0;
+
+            // Position at the center of the selected slot
+            enemyX = startX + (selectedSlotIndex * (boxWidth + spacing)) + (boxWidth / 2.0);
+            enemyY = 180; // Near the top where enemy boxes are
+        } else {
+            // Single enemy battle - use default positioning
+            enemyX = canvasWidth * 0.75; // Right side for enemy
+            enemyY = canvasHeight * 0.3;  // Upper area
+        }
+
+        double heroX = canvasWidth * 0.25;  // Left side for hero
+        double heroY = canvasHeight * 0.7;   // Lower area
+
+        // Parse damage dealt to enemy
+        int damageToEnemy = parseDamageFromLog(log, "damage");
+        boolean isCrit = log.contains("CRIT") || log.contains("CRITICAL");
+        boolean isDodge = log.contains("DODGE") || log.contains("a ratat");
+        boolean isMiss = log.contains("MISS") || log.contains("a ratat");
+
+        // Show damage to enemy
+        if (damageToEnemy > 0) {
+            com.rpg.ui.FloatingText.TextType textType = isCrit ?
+                    com.rpg.ui.FloatingText.TextType.CRITICAL :
+                    com.rpg.ui.FloatingText.TextType.DAMAGE;
+            com.rpg.ui.FloatingText.show(battleCanvas, String.valueOf(damageToEnemy), enemyX, enemyY, textType);
+
+            // Sound effect for damage
+            com.rpg.utils.SoundManager.playDamageSound(damageToEnemy, target.getViataMaxima(), isCrit);
+
+            // Screen shake for damage
+            if (isCrit) {
+                com.rpg.ui.ScreenShake.shake(battleRoot, com.rpg.ui.ScreenShake.ShakeIntensity.CRITICAL);
+            } else if (damageToEnemy > target.getViataMaxima() * 0.3) {
+                com.rpg.ui.ScreenShake.shake(battleRoot, com.rpg.ui.ScreenShake.ShakeIntensity.HEAVY);
+            } else {
+                com.rpg.ui.ScreenShake.shakeForDamage(battleRoot, damageToEnemy, target.getViataMaxima());
+            }
+
+            // Update enemy health bar
+            if (isMultiBattle && multiEnemyHealthBars != null && selectedSlotIndex >= 0 && selectedSlotIndex < 4) {
+                // Multi-battle: update only the specific enemy's health bar
+                if (multiEnemyHealthBars[selectedSlotIndex] != null && target != null) {
+                    multiEnemyHealthBars[selectedSlotIndex].updateHP(target.getViata(), true);
+                }
+            } else if (enemyAnimatedHealthBar != null && target != null) {
+                // Single enemy battle: update the single health bar
+                enemyAnimatedHealthBar.updateHP(target.getViata(), true);
+            }
+        }
+
+        // Show dodge/miss
+        if (isDodge) {
+            com.rpg.ui.FloatingText.show(battleCanvas, "DODGE!", enemyX, enemyY, com.rpg.ui.FloatingText.TextType.DODGE);
+            com.rpg.utils.SoundManager.play(com.rpg.utils.SoundManager.SoundEffect.DODGE);
+        } else if (isMiss) {
+            com.rpg.ui.FloatingText.show(battleCanvas, "MISS!", enemyX, enemyY, com.rpg.ui.FloatingText.TextType.MISS);
+            com.rpg.utils.SoundManager.play(com.rpg.utils.SoundManager.SoundEffect.ATTACK_MISS);
+        }
+
+        // Parse damage taken by hero (from enemy counterattack)
+        int damageToHero = parseDamageFromLog(log, "counterattack");
+        if (damageToHero > 0) {
+            com.rpg.ui.FloatingText.show(battleCanvas, String.valueOf(damageToHero), heroX, heroY, com.rpg.ui.FloatingText.TextType.DAMAGE);
+            com.rpg.ui.ScreenShake.shakeForDamage(battleRoot, damageToHero, hero.getViataMaxima());
+
+            // Sound effect for taking damage
+            com.rpg.utils.SoundManager.playDamageSound(damageToHero, hero.getViataMaxima(), false);
+
+            // Update hero health bar
+            if (heroAnimatedHealthBar != null) {
+                heroAnimatedHealthBar.updateHP(hero.getViata(), true);
+            }
+        }
+
+        // Parse healing
+        int healing = parseDamageFromLog(log, "vindec");
+        if (healing > 0) {
+            com.rpg.ui.FloatingText.show(battleCanvas, "+" + healing, heroX, heroY, com.rpg.ui.FloatingText.TextType.HEAL);
+            com.rpg.utils.SoundManager.play(com.rpg.utils.SoundManager.SoundEffect.HEAL);
+            if (heroAnimatedHealthBar != null) {
+                heroAnimatedHealthBar.updateHP(hero.getViata(), false);
+            }
+        }
+
+        // 🆕 PARSE DEBUFF DAMAGE (DOT - Damage Over Time)
+        int debuffDamage = parseDamageFromLog(log, "debuff_damage");
+        if (debuffDamage > 0) {
+            String debuffType = getDebuffTypeFromLog(log);
+
+            // Show debuff damage with thematic icon
+            String debuffIcon = switch (debuffType) {
+                case "burn" -> "🔥";
+                case "poison" -> "☠️";
+                case "bleed" -> "🩸";
+                case "freeze" -> "❄️";
+                case "shock" -> "⚡";
+                default -> "💀";
+            };
+
+            // Display floating text for debuff damage
+            com.rpg.ui.FloatingText.show(battleCanvas, debuffIcon + " " + debuffDamage,
+                    enemyX, enemyY, com.rpg.ui.FloatingText.TextType.DAMAGE);
+
+            // Play appropriate sound for debuff
+            com.rpg.utils.SoundManager.playDamageSound(debuffDamage, target.getViataMaxima(), false);
+
+            // Update enemy health bar
+            if (isMultiBattle && multiEnemyHealthBars != null && selectedSlotIndex >= 0 && selectedSlotIndex < 4) {
+                if (multiEnemyHealthBars[selectedSlotIndex] != null && target != null) {
+                    multiEnemyHealthBars[selectedSlotIndex].updateHP(target.getViata(), true);
+                }
+            } else if (enemyAnimatedHealthBar != null && target != null) {
+                enemyAnimatedHealthBar.updateHP(target.getViata(), true);
+            }
+        }
+
+        // 🆕 PARSE ENEMY REGENERATION
+        int enemyRegen = parseDamageFromLog(log, "regenerate");
+        if (enemyRegen > 0 && log.contains(target.getNume())) {
+            com.rpg.ui.FloatingText.show(battleCanvas, "💚 +" + enemyRegen,
+                    enemyX, enemyY, com.rpg.ui.FloatingText.TextType.HEAL);
+
+            if (isMultiBattle && multiEnemyHealthBars != null && selectedSlotIndex >= 0 && selectedSlotIndex < 4) {
+                if (multiEnemyHealthBars[selectedSlotIndex] != null && target != null) {
+                    multiEnemyHealthBars[selectedSlotIndex].updateHP(target.getViata(), false);
+                }
+            } else if (enemyAnimatedHealthBar != null && target != null) {
+                enemyAnimatedHealthBar.updateHP(target.getViata(), false);
+            }
+        }
+
+        // Update status effect displays
+        if (heroBuffDisplay != null) {
+            heroBuffDisplay.updateBuffs(hero.getBuffuriActive());
+        }
+        if (heroDebuffDisplay != null) {
+            // Use full DebuffStack for detailed tooltips
+            heroDebuffDisplay.updateDebuffs(hero.getDebuffuriActive());
+        }
+        if (enemyBuffDisplay != null && target != null) {
+            enemyBuffDisplay.updateBuffs(new java.util.HashMap<>()); // Enemies don't get buffed
+        }
+        if (enemyDebuffDisplay != null && target != null) {
+            // Use full DebuffStack for detailed tooltips
+            enemyDebuffDisplay.updateDebuffs(target.getDebuffStacksActive());
+        }
+    }
+
+    /**
+     * Parse damage numbers from log messages
+     */
+    private int parseDamageFromLog(String log, String context) {
+        try {
+            // Look for patterns like "X damage" or "X HP"
+            if (context.equals("damage")) {
+                // Pattern: "deals X damage"
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+)\\s+damage");
+                java.util.regex.Matcher matcher = pattern.matcher(log);
+                if (matcher.find()) {
+                    return Integer.parseInt(matcher.group(1));
+                }
+            } else if (context.equals("counterattack")) {
+                // Pattern for enemy counterattack damage
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("contraatac.*?(\\d+)\\s+damage");
+                java.util.regex.Matcher matcher = pattern.matcher(log);
+                if (matcher.find()) {
+                    return Integer.parseInt(matcher.group(1));
+                }
+            } else if (context.equals("vindec")) {
+                // Pattern for healing
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+)\\s+HP");
+                java.util.regex.Matcher matcher = pattern.matcher(log);
+                if (matcher.find()) {
+                    return Integer.parseInt(matcher.group(1));
+                }
+            } else if (context.equals("debuff_damage")) {
+                // Pattern for debuff damage: "takes X damage from"
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("takes\\s+(\\d+)\\s+damage\\s+from");
+                java.util.regex.Matcher matcher = pattern.matcher(log);
+                if (matcher.find()) {
+                    return Integer.parseInt(matcher.group(1));
+                }
+            } else if (context.equals("regenerate")) {
+                // Pattern for regeneration: "regenerates X HP"
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("regenerates\\s+(\\d+)\\s+HP");
+                java.util.regex.Matcher matcher = pattern.matcher(log);
+                if (matcher.find()) {
+                    return Integer.parseInt(matcher.group(1));
+                }
+            }
+        } catch (Exception e) {
+            // Ignore parsing errors
+        }
+        return 0;
+    }
+
+    /**
+     * Get debuff type from log message
+     */
+    private String getDebuffTypeFromLog(String log) {
+        String lower = log.toLowerCase();
+        if (lower.contains("burn") || lower.contains("fire")) return "burn";
+        if (lower.contains("poison") || lower.contains("otrava")) return "poison";
+        if (lower.contains("bleed") || lower.contains("sangerare")) return "bleed";
+        if (lower.contains("freeze") || lower.contains("ice") || lower.contains("gheata")) return "freeze";
+        if (lower.contains("shock") || lower.contains("lightning")) return "shock";
+        return "generic";
+    }
+
     // ==================== UI UPDATE ====================
 
     private void updateUI(AbilityDTO.BattleStateDTO state) {
@@ -1186,10 +2221,18 @@ public class BattleControllerFX {
         //         state.getEnemyHP(), enemyMaxHP));
 
         // ✅ UPDATE HERO cu protecție
-        heroHPLabel.setText(state.getHeroHP() + " / " + heroMaxHP);
-        double heroHpProgress = Math.min(1.0, Math.max(0.0, (double) state.getHeroHP() / heroMaxHP));
-        heroHPBar.setProgress(heroHpProgress);
-        animateHealthBar(heroHPBar);
+        if (heroHPLabel != null) {
+            heroHPLabel.setText(state.getHeroHP() + " / " + heroMaxHP);
+        }
+        if (heroHPBar != null) {
+            double heroHpProgress = Math.min(1.0, Math.max(0.0, (double) state.getHeroHP() / heroMaxHP));
+            heroHPBar.setProgress(heroHpProgress);
+            animateHealthBar(heroHPBar);
+        }
+        // Update animated health bar
+        if (heroAnimatedHealthBar != null) {
+            heroAnimatedHealthBar.updateHP(state.getHeroHP(), false);
+        }
 
         heroResourceLabel.setText(state.getHeroResource() + " / " + heroMaxRes);
         double heroResProgress = Math.min(1.0, Math.max(0.0, (double) state.getHeroResource() / heroMaxRes));
@@ -1202,10 +2245,28 @@ public class BattleControllerFX {
             enemyHPBar.setProgress(enemyHpProgress);
             animateHealthBar(enemyHPBar);
         }
+        // Update animated health bar
+        if (enemyAnimatedHealthBar != null) {
+            enemyAnimatedHealthBar.updateHP(state.getEnemyHP(), false);
+        }
 
         // ✅ UPDATE MULTI-ENEMY PANEL (if multi-battle)
         if (isMultiBattle && multiBattleState != null) {
             refreshMultiEnemyPanel();
+        }
+
+        // ✅ UPDATE STATUS EFFECTS
+        if (heroBuffDisplay != null && hero != null) {
+            heroBuffDisplay.updateBuffs(hero.getBuffuriActive());
+        }
+        if (heroDebuffDisplay != null) {
+            heroDebuffDisplay.updateDebuffs(hero.getDebuffuriActive()); // Display hero debuffs with full info
+        }
+        if (enemyBuffDisplay != null) {
+            enemyBuffDisplay.updateBuffs(new java.util.HashMap<>()); // Enemies don't get buffed
+        }
+        if (enemyDebuffDisplay != null && enemy != null) {
+            enemyDebuffDisplay.updateDebuffs(enemy.getDebuffStacksActive()); // Show enemy debuffs with full info
         }
 
         // ✅ UPDATE ABILITIES și POTIONS cu protecție
@@ -1220,6 +2281,9 @@ public class BattleControllerFX {
         abilityButtonsPanel.getChildren().clear();
 
         for (AbilityDTO ability : abilities) {
+            // Find the actual ability object to generate detailed tooltip
+            com.rpg.model.abilities.Abilitate actualAbility = findAbilityByName(ability.getName());
+
             Button btn = new Button(ability.getDisplayName());
             btn.setDisable(!ability.isAvailable());
 
@@ -1235,8 +2299,96 @@ public class BattleControllerFX {
 
             btn.setOnAction(e -> handleAbilityUse(ability.getName()));
 
+            // 🆕 Add detailed tooltip
+            if (actualAbility != null && hero != null) {
+                try {
+                    String tooltipText = com.rpg.utils.AbilityTooltipGenerator.generateTooltip(actualAbility, hero);
+                    if (tooltipText != null && !tooltipText.isEmpty()) {
+                        Tooltip tooltip = new Tooltip(tooltipText);
+                        tooltip.setStyle(
+                            "-fx-font-family: 'Courier New', monospace; " +
+                            "-fx-font-size: 11px; " +
+                            "-fx-background-color: #2c3e50; " +
+                            "-fx-text-fill: #ecf0f1; " +
+                            "-fx-padding: 10px; " +
+                            "-fx-background-radius: 5px; " +
+                            "-fx-max-width: 500px; " +
+                            "-fx-wrap-text: true;"
+                        );
+                        tooltip.setShowDelay(javafx.util.Duration.millis(300)); // Show after 300ms hover
+                        btn.setTooltip(tooltip);
+                    } else {
+                        // Fallback to simple tooltip
+                        Tooltip simpleTooltip = new Tooltip(ability.getName() + "\nCost: " + actualAbility.getCostMana());
+                        btn.setTooltip(simpleTooltip);
+                    }
+                } catch (Exception ex) {
+                    // Fallback to simple tooltip on error
+                    Tooltip simpleTooltip = new Tooltip(ability.getName());
+                    btn.setTooltip(simpleTooltip);
+                }
+            } else {
+                // Basic tooltip when ability not found
+                Tooltip basicTooltip = new Tooltip(ability.getName());
+                btn.setTooltip(basicTooltip);
+            }
+
             abilityButtonsPanel.getChildren().add(btn);
         }
+    }
+
+    /**
+     * Find the actual Abilitate object by name from hero's abilities
+     */
+    private com.rpg.model.abilities.Abilitate findAbilityByName(String name) {
+        if (hero == null) return null;
+
+        // Try to find in the new ability loadout system first
+        if (hero.getAbilityLoadout() != null) {
+            for (com.rpg.model.abilities.ConfiguredAbility configured : hero.getAbilityLoadout().getActiveAbilities()) {
+                if (configured != null) {
+                    // Check variant name (display name)
+                    if (configured.getDisplayName().equals(name)) {
+                        return configured.getBaseAbility();
+                    }
+                    // Check base ability name
+                    if (configured.getBaseAbility() != null && configured.getBaseAbility().getNume().equals(name)) {
+                        return configured.getBaseAbility();
+                    }
+                }
+            }
+        }
+
+        // Fallback to old ability system
+        for (com.rpg.model.abilities.Abilitate ability : hero.getAbilitati()) {
+            if (ability.getNume().equals(name)) {
+                return ability;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Find the ConfiguredAbility object by name (for enhanced tooltips)
+     */
+    private com.rpg.model.abilities.ConfiguredAbility findConfiguredAbilityByName(String name) {
+        if (hero == null || hero.getAbilityLoadout() == null) return null;
+
+        for (com.rpg.model.abilities.ConfiguredAbility configured : hero.getAbilityLoadout().getActiveAbilities()) {
+            if (configured != null) {
+                // Check variant name (display name)
+                if (configured.getDisplayName().equals(name)) {
+                    return configured;
+                }
+                // Check base ability name
+                if (configured.getBaseAbility() != null && configured.getBaseAbility().getNume().equals(name)) {
+                    return configured;
+                }
+            }
+        }
+
+        return null;
     }
 
     private void updatePotionButtons() {
@@ -1354,5 +2506,21 @@ public class BattleControllerFX {
      */
     public void setOnBattleEnd(BattleEndCallback callback) {
         this.onBattleEndCallback = callback;
+    }
+
+    /**
+     * Convertește Map<String, DebuffStack> în Map<String, Integer> pentru afișare
+     * Similar cu cum funcționează pentru enemy debuffs
+     */
+    private Map<String, Integer> convertDebuffStacksToMap(Map<String, DebuffStack> debuffStacks) {
+        Map<String, Integer> result = new java.util.HashMap<>();
+        if (debuffStacks != null) {
+            for (Map.Entry<String, DebuffStack> entry : debuffStacks.entrySet()) {
+                if (entry.getValue() != null && entry.getValue().isActive()) {
+                    result.put(entry.getKey(), entry.getValue().getDurata());
+                }
+            }
+        }
+        return result;
     }
 }
